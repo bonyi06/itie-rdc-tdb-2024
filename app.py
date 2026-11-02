@@ -29,14 +29,20 @@ log = logging.getLogger("tdb-itie")
 # ---------------------------------------------------------------------------
 SRC_INDEX = "https://www.tsl-itierdc.org/tableau_de_bord/index.php"
 SRC_2024  = "https://www.tsl-itierdc.org/tableau_de_bord_2024.php"
+SRC_ETATS = "https://www.tsl-itierdc.org/etats/"
 FX_RATE_CDF = 2793.46
-CACHE_TTL = 300  # 5 minutes
+CACHE_TTL = 300             # 5 minutes pour les tableaux de bord
+CACHE_TTL_DETAILS = 1800    # 30 minutes pour les flux détaillés (coûteux à scraper)
 USER_AGENT = "Mozilla/5.0 (compatible; ITIE-RDC-TDB/1.0; +https://www.itierdc.net)"
 TIMEOUT = 120         # Le serveur T/SL met 40-60 s à répondre, on laisse large
 MAX_RETRIES = 1       # 1 tentative + 1 retry
 
 _cache: dict[str, Any] = {"data": None, "ts": 0.0}
 _scrape_lock = threading.Lock()
+
+# Cache séparé pour les données détaillées, clé = (year, reportselect, perim)
+_details_cache: dict[tuple, dict] = {}
+_details_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +319,163 @@ _warmup_in_background()
 
 
 # ---------------------------------------------------------------------------
+# Scraping /etats/ — données détaillées (flux, par entreprise, dépenses sociales)
+# ---------------------------------------------------------------------------
+REPORT_LABELS = {
+    "decla-flux-global":  "Reporting par flux",
+    "decla-par-ese":      "Reporting par entreprise",
+    "decla-pso":          "Dépenses sociales par secteur et entreprise",
+}
+PERIMETRE_LABELS = {"": "Tous", "R": "Réconciliation", "U": "Unilatéral", "A": "Non classé"}
+
+
+def fetch_etats(year: int, reportselect: str, perimetre: str = "", company: str = "") -> str:
+    """POST sur /etats/ — endpoint AJAX qui renvoie l'HTML du tableau détaillé."""
+    data = {
+        "origine": "publique",
+        "reportselect": reportselect,
+        "year": str(year),
+        "perimetreList": perimetre,
+    }
+    if company:
+        data["company"] = company
+    last_err: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            r = requests.post(
+                SRC_ETATS,
+                data=data,
+                timeout=(10, TIMEOUT),
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": "https://www.tsl-itierdc.org/donnees-itie/",
+                },
+            )
+            r.raise_for_status()
+            r.encoding = r.apparent_encoding or "utf-8"
+            return r.text
+        except Exception as e:
+            last_err = e
+            log.warning("Tentative %d/%d /etats/ (%s %s) a échoué : %s",
+                        attempt + 1, MAX_RETRIES + 1, reportselect, year, e)
+            if attempt < MAX_RETRIES:
+                time.sleep(2 ** attempt)
+    assert last_err is not None
+    raise last_err
+
+
+def parse_etats_flux(html: str) -> dict[str, Any]:
+    """Parse le tableau 'Reporting par flux' retourné par /etats/."""
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table")
+    if not table:
+        return {"regies": [], "flux": [], "totals": {}}
+
+    regies: list[dict[str, Any]] = []
+    flux: list[dict[str, Any]] = []
+    current_regie: str | None = None
+
+    tbody = table.find("tbody") or table
+    for tr in tbody.find_all("tr"):
+        cells = tr.find_all("td")
+        if not cells:
+            continue
+        texts = [c.get_text(strip=True) for c in cells]
+        # Ligne entête de régie : premier td sans numéro, structure "NOM (CODE)"
+        is_header = tr.get("class") and any("header" in c.lower() or "regie" in c.lower() or "group" in c.lower() for c in tr.get("class"))
+        first = texts[0]
+        is_num_row = first.isdigit()
+        if not is_num_row and len(cells) >= 10:
+            # C'est probablement une ligne de régie (groupement)
+            current_regie = first
+            try:
+                regies.append({
+                    "name": current_regie,
+                    "soc_decl":  parse_number(texts[1]),
+                    "etat_decl": parse_number(texts[2]),
+                    "diff_decl": parse_number(texts[3]),
+                    "soc_adj":   parse_number(texts[4]),
+                    "etat_adj":  parse_number(texts[5]),
+                    "diff_adj":  parse_number(texts[6]),
+                    "soc_fin":   parse_number(texts[7]),
+                    "etat_fin":  parse_number(texts[8]),
+                    "diff_fin":  parse_number(texts[9]),
+                })
+            except (IndexError, ValueError):
+                pass
+        elif is_num_row and len(cells) >= 11:
+            # Ligne de flux individuel
+            try:
+                flux.append({
+                    "no": int(first),
+                    "regie": current_regie or "—",
+                    "flux": texts[1],
+                    "soc_decl":  parse_number(texts[2]),
+                    "etat_decl": parse_number(texts[3]),
+                    "diff_decl": parse_number(texts[4]),
+                    "soc_adj":   parse_number(texts[5]),
+                    "etat_adj":  parse_number(texts[6]),
+                    "diff_adj":  parse_number(texts[7]),
+                    "soc_fin":   parse_number(texts[8]),
+                    "etat_fin":  parse_number(texts[9]),
+                    "diff_fin":  parse_number(texts[10]),
+                })
+            except (IndexError, ValueError):
+                pass
+
+    totals = {
+        "nb_regies": len(regies),
+        "nb_flux": len(flux),
+        "sum_soc_decl":  sum(f["soc_decl"] for f in flux),
+        "sum_etat_decl": sum(f["etat_decl"] for f in flux),
+        "sum_soc_fin":   sum(f["soc_fin"] for f in flux),
+        "sum_etat_fin":  sum(f["etat_fin"] for f in flux),
+        "sum_diff_fin":  sum(f["diff_fin"] for f in flux),
+    }
+    return {"regies": regies, "flux": flux, "totals": totals}
+
+
+def get_details(year: int, reportselect: str, perimetre: str = "") -> dict[str, Any]:
+    """Récupère les données détaillées avec cache long + verrou."""
+    key = (year, reportselect, perimetre)
+    now = time.time()
+    cached = _details_cache.get(key)
+    if cached and (now - cached["ts"]) < CACHE_TTL_DETAILS:
+        return cached["data"]
+    with _details_lock:
+        cached = _details_cache.get(key)
+        if cached and (now - cached["ts"]) < CACHE_TTL_DETAILS:
+            return cached["data"]
+        try:
+            html = fetch_etats(year, reportselect, perimetre)
+            parsed = parse_etats_flux(html)
+            parsed["year"] = year
+            parsed["reportselect"] = reportselect
+            parsed["report_label"] = REPORT_LABELS.get(reportselect, reportselect)
+            parsed["perimetre"] = perimetre
+            parsed["perimetre_label"] = PERIMETRE_LABELS.get(perimetre, perimetre)
+            parsed["scraped_at"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            _details_cache[key] = {"data": parsed, "ts": now}
+            return parsed
+        except Exception as e:
+            log.error("Échec /etats/ (%s %s %s) : %s", year, reportselect, perimetre, e)
+            if cached:
+                return cached["data"]
+            return {
+                "regies": [], "flux": [], "totals": {},
+                "year": year, "reportselect": reportselect,
+                "report_label": REPORT_LABELS.get(reportselect, reportselect),
+                "perimetre": perimetre,
+                "perimetre_label": PERIMETRE_LABELS.get(perimetre, perimetre),
+                "scraped_at": datetime.now().strftime("%d/%m/%Y %H:%M") + " — données ITIE indisponibles",
+                "error": str(e),
+            }
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -333,6 +496,43 @@ def refresh():
 @app.route("/healthz")
 def healthz():
     return "OK", 200
+
+
+@app.route("/details")
+def details():
+    """Page détails des déclarations — filtres + table complète + export."""
+    from flask import request
+    year = request.args.get("year", "2023")
+    try:
+        year_int = int(year)
+    except ValueError:
+        year_int = 2023
+    reportselect = request.args.get("report", "decla-flux-global")
+    perimetre = request.args.get("perim", "")
+    if reportselect not in REPORT_LABELS:
+        reportselect = "decla-flux-global"
+    if perimetre not in PERIMETRE_LABELS:
+        perimetre = ""
+    data = get_details(year_int, reportselect, perimetre)
+    return render_template("details.html", data=data,
+                           years=list(range(2015, 2025)),
+                           report_labels=REPORT_LABELS,
+                           perim_labels=PERIMETRE_LABELS)
+
+
+@app.route("/api/details")
+def api_details():
+    """Endpoint JSON pour recharger la table en AJAX sans toute la page."""
+    from flask import request, jsonify
+    year = request.args.get("year", "2023")
+    try:
+        year_int = int(year)
+    except ValueError:
+        year_int = 2023
+    reportselect = request.args.get("report", "decla-flux-global")
+    perimetre = request.args.get("perim", "")
+    data = get_details(year_int, reportselect, perimetre)
+    return jsonify(data)
 
 
 @app.route("/diag")
