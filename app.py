@@ -306,6 +306,103 @@ def healthz():
     return "OK", 200
 
 
+@app.route("/diag")
+def diag():
+    """
+    Diagnostic réseau — teste la joignabilité du serveur T/SL depuis Render.
+    Résultats attendus pour comprendre où ça bloque.
+    """
+    import socket
+    import ssl
+    from urllib.parse import urlparse
+
+    out = ["<pre style='font-family: monospace; padding: 20px;'>"]
+    out.append("DIAGNOSTIC — depuis les serveurs Render\n")
+    out.append(f"Horodatage : {datetime.now().isoformat()}\n")
+    out.append("=" * 70 + "\n")
+
+    # Test 1 : résolution DNS
+    out.append("\n[1] Résolution DNS de www.tsl-itierdc.org\n")
+    try:
+        ip = socket.gethostbyname("www.tsl-itierdc.org")
+        out.append(f"    OK → IP résolue : {ip}\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
+
+    # Test 2 : connexion TCP port 443
+    out.append("\n[2] Connexion TCP sur port 443 (handshake HTTPS)\n")
+    try:
+        t0 = time.time()
+        with socket.create_connection(("www.tsl-itierdc.org", 443), timeout=15):
+            dt = time.time() - t0
+            out.append(f"    OK → connecté en {dt:.2f} s\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
+
+    # Test 3 : handshake TLS
+    out.append("\n[3] Handshake TLS\n")
+    try:
+        t0 = time.time()
+        ctx = ssl.create_default_context()
+        with socket.create_connection(("www.tsl-itierdc.org", 443), timeout=15) as sock:
+            with ctx.wrap_socket(sock, server_hostname="www.tsl-itierdc.org") as ssock:
+                dt = time.time() - t0
+                out.append(f"    OK → TLS établi en {dt:.2f} s, cipher={ssock.cipher()[0]}\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
+
+    # Test 4 : HEAD sur la racine du site (page légère)
+    out.append("\n[4] HEAD https://www.tsl-itierdc.org/  (page d'accueil, légère)\n")
+    try:
+        t0 = time.time()
+        r = requests.head(
+            "https://www.tsl-itierdc.org/",
+            timeout=30,
+            headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
+            allow_redirects=True,
+        )
+        dt = time.time() - t0
+        out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s\n")
+        out.append(f"    Headers reçus : Server={r.headers.get('Server', '?')}, "
+                   f"Content-Length={r.headers.get('Content-Length', '?')}\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {str(e)[:200]}\n")
+
+    # Test 5 : GET sur la page du tableau de bord (page lourde)
+    out.append("\n[5] GET https://www.tsl-itierdc.org/tableau_de_bord/index.php  (lourde)\n")
+    try:
+        t0 = time.time()
+        r = requests.get(
+            "https://www.tsl-itierdc.org/tableau_de_bord/index.php",
+            timeout=90,
+            headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*"},
+        )
+        dt = time.time() - t0
+        out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s, "
+                   f"{len(r.content)} octets\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {str(e)[:200]}\n")
+
+    # Test 6 : GET sur un site connu (contrôle que le réseau sortant marche)
+    out.append("\n[6] GET https://www.google.com/  (contrôle : réseau sortant Render)\n")
+    try:
+        t0 = time.time()
+        r = requests.get("https://www.google.com/", timeout=15)
+        dt = time.time() - t0
+        out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s\n")
+    except Exception as e:
+        out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
+
+    out.append("\n" + "=" * 70 + "\n")
+    out.append("Interprétation :\n")
+    out.append("- Si [1]-[3] passent mais [4]-[5] timeout → serveur T/SL filtre ou ignore\n")
+    out.append("  les connexions depuis Render (IP, UA, cookies de session).\n")
+    out.append("- Si [1]-[3] échouent → problème réseau fondamental.\n")
+    out.append("- Si [6] passe et [4]-[5] non → confirmation que c'est spécifique T/SL.\n")
+    out.append("</pre>")
+    return "".join(out)
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
