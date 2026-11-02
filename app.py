@@ -30,8 +30,9 @@ SRC_INDEX = "https://www.tsl-itierdc.org/tableau_de_bord/index.php"
 SRC_2024  = "https://www.tsl-itierdc.org/tableau_de_bord_2024.php"
 FX_RATE_CDF = 2793.46
 CACHE_TTL = 300  # 5 minutes
-USER_AGENT = "ITIE-RDC-TDB/1.0 (+https://www.itierdc.net)"
-TIMEOUT = 20
+USER_AGENT = "Mozilla/5.0 (compatible; ITIE-RDC-TDB/1.0; +https://www.itierdc.net)"
+TIMEOUT = 60          # Le serveur T/SL est lent, on laisse 60 s
+MAX_RETRIES = 2       # Nombre de tentatives supplémentaires en cas d'échec
 
 _cache: dict[str, Any] = {"data": None, "ts": 0.0}
 
@@ -56,10 +57,30 @@ def parse_int(s: str) -> int:
 # Scrapers
 # ---------------------------------------------------------------------------
 def fetch(url: str) -> str:
-    r = requests.get(url, timeout=TIMEOUT, headers={"User-Agent": USER_AGENT})
-    r.raise_for_status()
-    r.encoding = r.apparent_encoding or "utf-8"
-    return r.text
+    """GET avec retries exponentiels. Les pages T/SL sont lentes à générer."""
+    last_err: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            r = requests.get(
+                url,
+                timeout=(10, TIMEOUT),  # (connect, read)
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+                },
+            )
+            r.raise_for_status()
+            r.encoding = r.apparent_encoding or "utf-8"
+            return r.text
+        except Exception as e:
+            last_err = e
+            log.warning("Tentative %d/%d a échoué pour %s : %s",
+                        attempt + 1, MAX_RETRIES + 1, url, e)
+            if attempt < MAX_RETRIES:
+                time.sleep(2 ** attempt)  # 1 s, 2 s
+    assert last_err is not None
+    raise last_err
 
 
 def scrape_index() -> dict[str, list[dict[str, Any]]]:
@@ -225,6 +246,26 @@ def aggregate() -> dict[str, Any]:
     }
 
 
+def _fallback_data() -> dict[str, Any]:
+    """Données de secours affichées quand les sources ITIE sont injoignables.
+    On montre que le site est bien en ligne mais que la source est muette."""
+    return {
+        "perimetres": {"recon": {"pct": 0, "num": 0, "den": 0},
+                       "unilat": {"pct": 0, "num": 0, "den": 0},
+                       "total": {"pct": 0, "num": 0, "den": 0}},
+        "regies_top": [],
+        "regies_all": [],
+        "entreprises": [],
+        "matrix": [],
+        "sum_usd": 0, "sum_cdf": 0, "sum_usd_eq": 0, "sum_lignes": 0,
+        "nb_regies": 0, "nb_entreprises": 0,
+        "nb_enrolled": 0, "nb_declar": 0,
+        "fx": FX_RATE_CDF,
+        "scraped_at": datetime.now().strftime("%d/%m/%Y %H:%M")
+                      + " — données ITIE indisponibles, nouvelle tentative dans 5 min",
+    }
+
+
 def get_data() -> dict[str, Any]:
     now = time.time()
     if _cache["data"] is None or (now - _cache["ts"]) > CACHE_TTL:
@@ -235,7 +276,10 @@ def get_data() -> dict[str, Any]:
         except Exception as e:
             log.error("Rafraîchissement échoué : %s", e)
             if _cache["data"] is None:
-                raise
+                # Première requête ratée : on sert une page "attente" plutôt
+                # que de retourner un 500 moche.
+                _cache["data"] = _fallback_data()
+                _cache["ts"] = now - CACHE_TTL + 60  # réessaie dans 1 min
     return _cache["data"]
 
 
