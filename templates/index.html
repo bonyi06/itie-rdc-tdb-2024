@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Tableau de bord live des télédéclarations ITIE-RDC — campagne 2024.">
+<meta name="theme-color" content="#0068B4">
+<title>ITIE-RDC — Déclarations 2024</title>
+<meta http-equiv="refresh" content="300">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230068B4'/%3E%3Ctext x='50' y='68' font-family='Arial,sans-serif' font-size='54' font-weight='800' text-anchor='middle' fill='%23FBB800'%3EI%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --itie-blue:#0068B4; --itie-blue-dark:#004F89; --itie-blue-light:#1A82D5; --itie-blue-top:#1898DD;
+  --itie-yellow:#FBB800; --itie-yellow-dark:#E6A800; --itie-yellow-text:#B37D00;
+  --fg:#1F2937; --fg-muted:#4B5563; --fg-dim:#6B7280;
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F3F6FA; --surface-3:#E5EDF5;
+  --border:#DBE3EC;
+  --ok:#16A34A; --ok-soft:#DCFCE7;
+  --warn:#D97706; --warn-soft:#FEF3C7;
+  --crit:#DC2626; --crit-soft:#FEE2E2;
+  --shadow-sm:0 1px 2px rgba(31,41,55,0.04);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#FFF;color:var(--fg);font-family:'Open Sans',system-ui,sans-serif;font-size:14px;line-height:1.55}
+h1,h2,h3{font-family:'Montserrat',sans-serif;margin:0;letter-spacing:-0.01em}
+.num{font-variant-numeric:tabular-nums}
+
+.topbar{background:var(--itie-blue-top);color:#FFF;font-size:0.82rem;padding:7px max(16px,env(safe-area-inset-left,0px))}
+.topbar-inner{max-width:1360px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.topbar .contact{display:inline-flex;gap:20px;flex-wrap:wrap}
+.topbar .contact span{display:inline-flex;align-items:center;gap:6px}
+
+.navbar{background:#FFF;padding:14px max(16px,env(safe-area-inset-left,0px));border-bottom:3px solid var(--surface-2);position:sticky;top:0;z-index:50}
+.navbar-inner{max-width:1360px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.logo{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.4rem;color:var(--itie-blue);text-decoration:none}
+.logo .lrdc{color:var(--itie-blue-light)}
+.nav-menu{display:flex;gap:6px;font-family:'Montserrat',sans-serif;font-size:0.9rem;font-weight:600}
+.nav-menu a{color:var(--fg);text-decoration:none;padding:8px 12px;border-radius:4px;white-space:nowrap}
+.nav-menu a:hover{color:var(--itie-blue);background:var(--surface-2)}
+.nav-menu a.active{color:var(--itie-blue);border-bottom:2px solid var(--itie-yellow);border-radius:0}
+@media(max-width:980px){.nav-menu{display:none}}
+
+.hero{background:linear-gradient(135deg,rgba(0,104,180,0.95),rgba(0,79,137,0.95)),var(--itie-blue);color:#FFF;padding:44px max(16px,env(safe-area-inset-left,0px)) 54px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.03) 0 2px,transparent 2px 60px);pointer-events:none}
+.hero-inner{max-width:1360px;margin:0 auto;position:relative;display:grid;grid-template-columns:1.4fr 1fr;gap:36px;align-items:center}
+@media(max-width:980px){.hero-inner{grid-template-columns:1fr}}
+.hero .eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(251,184,0,0.15);border:1px solid rgba(251,184,0,0.45);color:var(--itie-yellow);font-weight:700;font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;padding:5px 12px;border-radius:999px;margin-bottom:16px}
+.hero .eyebrow::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--itie-yellow);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.hero h1{font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;line-height:1.1;margin-bottom:14px}
+.hero h1 .accent{color:var(--itie-yellow)}
+.hero p.lead{font-size:1.02rem;color:rgba(255,255,255,0.9);max-width:54ch;margin-bottom:24px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px 20px;font-size:0.82rem;color:rgba(255,255,255,0.8);padding-top:14px;border-top:1px solid rgba(255,255,255,0.15)}
+.hero-meta strong{color:#FFF;font-weight:700}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:4px;font:600 0.9rem 'Montserrat',sans-serif;cursor:pointer;border:0;text-decoration:none;white-space:nowrap}
+.btn-primary{background:var(--itie-yellow);color:#1F2937}
+.btn-primary:hover{background:var(--itie-yellow-dark)}
+.btn-outline{background:transparent;color:#FFF;border:1.5px solid #FFF}
+.btn-outline:hover{background:#FFF;color:var(--itie-blue)}
+
+.hero-stats{background:rgba(0,55,100,0.72);border:1px solid rgba(255,255,255,0.14);padding:24px 26px;border-radius:10px}
+.hero-stats h3{font-size:1.15rem;font-weight:700;color:#FFF;margin-bottom:20px}
+.hs-row{display:flex;align-items:baseline;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.12);gap:20px}
+.hs-row:last-child{border-bottom:0}
+.hs-label{font-size:0.88rem;color:rgba(255,255,255,0.85)}
+.hs-value{font-family:'Montserrat',sans-serif;font-weight:800;color:var(--itie-yellow);font-size:1.35rem;font-variant-numeric:tabular-nums}
+
+.kpi-band{background:var(--surface-2);padding:36px max(16px,env(safe-area-inset-left,0px))}
+.kpi-band-inner{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.kpi-card{background:#FFF;border-radius:10px;padding:24px 20px;text-align:center;box-shadow:var(--shadow-sm);border:1px solid var(--border)}
+.k-value{font-family:'Montserrat',sans-serif;font-weight:800;font-size:clamp(1.8rem,3vw,2.2rem);color:var(--itie-blue);line-height:1.1;margin-bottom:8px}
+.k-value .unit{font-size:0.9rem;color:var(--fg-dim);font-weight:600;margin-left:4px}
+.k-label{color:var(--fg-muted);font-size:0.92rem;font-weight:500}
+.k-foot{color:var(--fg-dim);font-size:0.78rem;margin-top:6px}
+.kpi-card.highlight .k-value{color:var(--itie-yellow-text)}
+
+section.main-sec{padding:44px max(16px,env(safe-area-inset-left,0px))}
+section.alt-sec{padding:44px max(16px,env(safe-area-inset-left,0px));background:var(--surface-2)}
+.sec-inner{max-width:1360px;margin:0 auto}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid var(--surface-3)}
+.sec-head h2{font-size:clamp(1.3rem,2.5vw,1.6rem);font-weight:700;color:var(--itie-blue)}
+.sec-head h2::before{content:"";display:inline-block;width:4px;height:1.1em;background:var(--itie-yellow);margin-right:10px;vertical-align:-3px;border-radius:2px}
+.sec-note{color:var(--fg-muted);font-size:0.9rem}
+
+.perimetre-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.perim-card{background:#FFF;border-radius:10px;border:1px solid var(--border);padding:22px 24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.perim-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:var(--itie-blue)}
+.perim-card.recon::before{background:var(--ok)}
+.perim-card.unilat::before{background:var(--itie-yellow)}
+.perim-card h3{font-size:1.05rem;font-weight:700;color:var(--itie-blue);margin-bottom:4px}
+.p-desc{color:var(--fg-dim);font-size:0.82rem;margin-bottom:18px;min-height:32px}
+.p-main{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.p-pct{font-family:'Montserrat',sans-serif;font-weight:800;font-size:2.6rem;color:var(--itie-blue);line-height:1}
+.perim-card.recon .p-pct{color:var(--ok)}
+.perim-card.unilat .p-pct{color:var(--itie-yellow-dark)}
+.p-ratio{color:var(--fg-muted);font-size:0.9rem;font-weight:600}
+.p-bar{background:var(--surface-3);border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px}
+.p-bar-fill{height:100%;border-radius:999px}
+.perim-card.recon .p-bar-fill{background:var(--ok)}
+.perim-card.unilat .p-bar-fill{background:var(--itie-yellow)}
+.perim-card.total .p-bar-fill{background:var(--itie-blue)}
+.p-foot{font-size:0.8rem;color:var(--fg-dim)}
+
+.two-col{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+@media(max-width:980px){.two-col{grid-template-columns:1fr}}
+.panel{background:#FFF;border-radius:10px;border:1px solid var(--border);padding:24px;box-shadow:var(--shadow-sm)}
+.panel h3{font-size:1.05rem;font-weight:700;color:var(--itie-blue);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--surface-3)}
+.chart-wrap{position:relative;width:100%;height:260px}
+.chart-wrap.lg{height:340px}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center}
+.controls input[type="search"]{flex:1 1 240px;background:#FFF;color:var(--fg);border:1.5px solid var(--border);padding:9px 14px;border-radius:4px;font:inherit;font-size:0.9rem}
+.controls input[type="search"]:focus{outline:0;border-color:var(--itie-blue);box-shadow:0 0 0 3px rgba(0,104,180,0.1)}
+
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);background:#FFF;box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:0.9rem}
+thead th{text-align:left;background:var(--itie-blue);color:#FFF;font-family:'Montserrat',sans-serif;font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;padding:14px;white-space:nowrap}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--surface-3)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+.nif{color:var(--fg-dim);font-size:0.78rem}
+.name{font-weight:600;color:var(--fg)}
+.right{text-align:right}
+
+.site-footer{background:var(--itie-blue-dark);color:rgba(255,255,255,0.85);padding:32px max(16px,env(safe-area-inset-left,0px)) 24px;margin-top:50px}
+.footer-inner{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr;gap:32px}
+@media(max-width:760px){.footer-inner{grid-template-columns:1fr}}
+.site-footer h4{font-family:'Montserrat',sans-serif;color:var(--itie-yellow);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;font-weight:700}
+.site-footer a{color:#FFF;text-decoration:none}
+.site-footer a:hover{color:var(--itie-yellow)}
+.footer-bottom{max-width:1360px;margin:24px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:0.78rem}
+.hidden-row{display:none !important}
+
+.status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:0.75rem;font-weight:700;font-family:'Montserrat',sans-serif;white-space:nowrap}
+.status-chip.ok{background:var(--ok-soft);color:var(--ok)}
+.status-chip.warn{background:var(--warn-soft);color:var(--warn)}
+.status-chip.crit{background:var(--crit-soft);color:var(--crit)}
+.status-chip::before{content:"";width:6px;height:6px;border-radius:50%}
+.status-chip.ok::before{background:var(--ok)}
+.status-chip.warn::before{background:var(--warn)}
+.status-chip.crit::before{background:var(--crit)}
+.prog{width:100%;min-width:100px;background:var(--surface-3);border-radius:999px;height:8px;overflow:hidden}
+.prog-fill{height:100%;border-radius:999px;background:var(--ok)}
+.prog-fill.warn{background:var(--itie-yellow)}
+.prog-fill.crit{background:var(--crit);opacity:0.4}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="contact">
+      <span>📞 +243 824 855 057</span>
+      <span>✉ secretariat@itierdc.org</span>
+    </div>
+    <div>Dernière mise à jour : <strong>{{ data.scraped_at }}</strong> &middot; FX : {{ "{:,.2f}".format(data.fx).replace(",", " ").replace(".", ",") }} CDF/USD</div>
+  </div>
+</div>
+
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="logo">ITIE<span class="lrdc">RDC</span></a>
+    <div class="nav-menu">
+      <a href="https://www.itierdc.net" target="_blank" rel="noopener">Site ITIE-RDC</a>
+      <a href="/" class="active">Suivi des déclarations</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="eyebrow">Données live &middot; Campagne 2024</div>
+      <h1>Tableau de bord de la<br><span class="accent">télédéclaration</span> ITIE 2024</h1>
+      <p class="lead">Suivi des déclarations contradictoires des {{ data.perimetres.recon.den }} entreprises
+      extractives du périmètre de réconciliation et des {{ data.nb_regies }} structures percevant les flux
+      issus des mines et hydrocarbures.</p>
+      <div class="hero-meta">
+        <span>Période : <strong>Mai → Octobre 2024</strong></span>
+        <span>Rafraîchissement : <strong>5 min</strong></span>
+        <span>Taux de change 2024 : <strong>{{ "{:,.2f}".format(data.fx).replace(",", " ").replace(".", ",") }} CDF / USD</strong></span>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <h3>Chiffres clés — Réconciliation 2024</h3>
+      <div class="hs-row"><span class="hs-label">Entreprises en réconciliation</span><span class="hs-value">{{ data.perimetres.recon.den }}</span></div>
+      <div class="hs-row"><span class="hs-label">Ayant déclaré</span><span class="hs-value">{{ data.perimetres.recon.num }} ({{ data.perimetres.recon.pct }} %)</span></div>
+      <div class="hs-row"><span class="hs-label">Structures régies / EP</span><span class="hs-value">{{ data.nb_regies }}</span></div>
+      <div class="hs-row"><span class="hs-label">Montant USD déclaré</span><span class="hs-value">{{ "{:,.2f}".format(data.sum_usd / 1e9).replace(",", " ").replace(".", ",") }} Md USD</span></div>
+      <div class="hs-row"><span class="hs-label">Équivalent total</span><span class="hs-value">{{ "{:,.2f}".format(data.sum_usd_eq / 1e9).replace(",", " ").replace(".", ",") }} Md USD</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="kpi-band">
+  <div class="kpi-band-inner">
+    <div class="kpi-card">
+      <div class="k-value num">{{ data.perimetres.recon.den }}</div>
+      <div class="k-label">Entreprises en réconciliation</div>
+      <div class="k-foot">Périmètre principal — déclaration contradictoire</div>
+    </div>
+    <div class="kpi-card highlight">
+      <div class="k-value num">{{ data.perimetres.recon.num }}</div>
+      <div class="k-label">Ayant déclaré</div>
+      <div class="k-foot">{{ data.perimetres.recon.pct }} % — {{ data.perimetres.recon.den - data.perimetres.recon.num }} à relancer</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-value num">{{ data.nb_regies }}</div>
+      <div class="k-label">Régies et EP enregistrées</div>
+      <div class="k-foot">Nationales, provinciales, locales</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-value num">{{ "{:,.0f}".format(data.sum_lignes).replace(",", " ") }}</div>
+      <div class="k-label">Lignes de déclaration</div>
+      <div class="k-foot">Flux détaillés agrégés</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-value num">{{ "{:,.2f}".format(data.sum_usd / 1e9).replace(",", " ").replace(".", ",") }}<span class="unit">Md USD</span></div>
+      <div class="k-label">Montant USD déclaré</div>
+      <div class="k-foot">USD natif</div>
+    </div>
+    <div class="kpi-card highlight">
+      <div class="k-value num">{{ "{:,.2f}".format(data.sum_usd_eq / 1e9).replace(",", " ").replace(".", ",") }}<span class="unit">Md USD</span></div>
+      <div class="k-label">Équivalent USD total</div>
+      <div class="k-foot">USD + CDF au taux {{ "{:,.2f}".format(data.fx).replace(",", " ").replace(".", ",") }}</div>
+    </div>
+  </div>
+</div>
+
+<section class="main-sec">
+  <div class="sec-inner">
+    <div class="sec-head"><h2>Avancement par périmètre de déclaration</h2><span class="sec-note">Réconciliation (double déclaration) &middot; Unilatéral (régies seules)</span></div>
+    <div class="perimetre-grid">
+      <div class="perim-card recon">
+        <h3>Réconciliation</h3>
+        <div class="p-desc">Entreprises déclarant en double avec les régies</div>
+        <div class="p-main"><span class="p-pct">{{ data.perimetres.recon.pct }}%</span><span class="p-ratio">{{ data.perimetres.recon.num }} / {{ data.perimetres.recon.den }} entreprises</span></div>
+        <div class="p-bar"><div class="p-bar-fill" style="width:{{ data.perimetres.recon.pct }}%"></div></div>
+        <div class="p-foot">{{ data.perimetres.recon.den - data.perimetres.recon.num }} entreprises à relancer</div>
+      </div>
+      <div class="perim-card unilat">
+        <h3>Unilatéral</h3>
+        <div class="p-desc">Régies et entités perceptrices seules</div>
+        <div class="p-main"><span class="p-pct">{{ data.perimetres.unilat.pct }}%</span><span class="p-ratio">{{ data.perimetres.unilat.num }} / {{ data.perimetres.unilat.den }} entreprises</span></div>
+        <div class="p-bar"><div class="p-bar-fill" style="width:{{ data.perimetres.unilat.pct }}%"></div></div>
+        <div class="p-foot">{{ data.perimetres.unilat.den - data.perimetres.unilat.num }} opérateurs attendus — priorité</div>
+      </div>
+      <div class="perim-card total">
+        <h3>Total consolidé</h3>
+        <div class="p-desc">Ensemble du périmètre 2024</div>
+        <div class="p-main"><span class="p-pct">{{ data.perimetres.total.pct }}%</span><span class="p-ratio">{{ data.perimetres.total.num }} / {{ data.perimetres.total.den }} entreprises</span></div>
+        <div class="p-bar"><div class="p-bar-fill" style="width:{{ data.perimetres.total.pct }}%"></div></div>
+        <div class="p-foot">Objectif campagne : 80% au 31 décembre</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt-sec">
+  <div class="sec-inner">
+    <div class="sec-head"><h2>Volumes et montants déclarés</h2><span class="sec-note">Côté régies perceptrices</span></div>
+    <div class="two-col">
+      <div class="panel">
+        <h3>Top régies par montant collecté</h3>
+        <div class="chart-wrap lg"><canvas id="regieBar"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Devise de déclaration</h3>
+        <div class="chart-wrap"><canvas id="currencyPie"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="main-sec">
+  <div class="sec-inner">
+    <div class="sec-head"><h2>Top 15 régies perceptrices</h2><span class="sec-note">Classement par équivalent USD décroissant</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:40px">N°</th><th>Structure</th><th class="right">Lignes</th><th class="right">Total USD</th><th class="right">Total CDF</th><th class="right">Équivalent USD</th></tr></thead>
+        <tbody>
+        {% for r in data.regies_top %}
+          <tr>
+            <td style="color:var(--fg-dim)" class="num">{{ "%02d" % (loop.index) }}</td>
+            <td class="name">{{ r.structure }}</td>
+            <td class="right num">{{ "{:,.0f}".format(r.lignes).replace(",", " ") }}</td>
+            <td class="right num">{% if r.usd > 0 %}{{ "{:,.2f}".format(r.usd).replace(",", "X").replace(".", ",").replace("X", " ") }}{% else %}—{% endif %}</td>
+            <td class="right num">{% if r.cdf > 0 %}{{ "{:,.2f}".format(r.cdf).replace(",", "X").replace(".", ",").replace("X", " ") }}{% else %}—{% endif %}</td>
+            <td class="right num" style="color:var(--itie-blue);font-weight:700">{{ "{:,.0f}".format(r.usd_eq).replace(",", " ") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="alt-sec">
+  <div class="sec-inner">
+    <div class="sec-head"><h2>Top entreprises par volume de déclarations</h2><span class="sec-note">Nombre de lignes de flux déclarées</span></div>
+    <div class="controls">
+      <input type="search" id="searchBox" placeholder="Rechercher une entreprise ou un NIF…" />
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:40px">N°</th><th>Entreprise</th><th>NIF</th><th class="right">Lignes déclarées</th></tr></thead>
+        <tbody id="entBody">
+        {% for e in data.entreprises %}
+          <tr data-name="{{ (e.nif + ' ' + e.structure)|lower }}">
+            <td style="color:var(--fg-dim)" class="num">{{ "%02d" % (loop.index) }}</td>
+            <td class="name">{{ e.structure }}</td>
+            <td class="nif">{{ e.nif }}</td>
+            <td class="right num">{{ "{:,.0f}".format(e.lignes).replace(",", " ") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div>
+      <div style="color:#FFF;font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.3rem;margin-bottom:12px;">ITIERDC</div>
+      <p style="font-size:0.86rem;max-width:40ch;">Initiative pour la Transparence des Industries Extractives. Promouvoir la transparence et la bonne gouvernance des revenus issus des industries extractives en RDC.</p>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <div style="font-size:0.86rem;line-height:1.9;">+243 824 855 057<br>secretariat@itierdc.org<br>Kinshasa / Gombe</div>
+    </div>
+    <div>
+      <h4>Plateforme T/SL</h4>
+      <div style="font-size:0.86rem;line-height:1.9;"><a href="https://www.tsl-itierdc.org">tsl-itierdc.org</a><br><a href="https://www.itierdc.net">itierdc.net</a></div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© {{ data.scraped_at[-4:] if data.scraped_at else '2024' }} ITIE-RDC — Secrétariat technique</span>
+    <span>Dernière mise à jour : {{ data.scraped_at }}</span>
+  </div>
+</footer>
+
+<script>
+const REGIES = {{ data.regies_top | tojson }};
+const FX = {{ data.fx }};
+
+Chart.defaults.font.family = "'Open Sans',system-ui,sans-serif";
+Chart.defaults.font.size = 12;
+const BLUE = "#0068B4", YELLOW = "#FBB800", GREY = "#6B7280";
+
+new Chart(document.getElementById("regieBar"), {
+  type:"bar",
+  data: {
+    labels: REGIES.map(r => r.structure),
+    datasets: [
+      { label:"USD natif", data: REGIES.map(r => Math.round(r.usd/1e6)), backgroundColor: BLUE, borderRadius: 2, maxBarThickness: 16 },
+      { label:"CDF converti", data: REGIES.map(r => Math.round(r.cdf/FX/1e6)), backgroundColor: YELLOW, borderRadius: 2, maxBarThickness: 16 }
+    ]
+  },
+  options: {
+    indexAxis:"y", responsive:true, maintainAspectRatio:false,
+    plugins: {
+      legend:{position:"top",align:"end",labels:{color:GREY,boxWidth:12,font:{size:11,weight:"600",family:"'Montserrat',sans-serif"}}},
+      tooltip:{callbacks:{label:c => `${c.dataset.label}: ${c.parsed.x} M USD`}}
+    },
+    scales:{
+      x:{stacked:true,grid:{color:"rgba(31,41,55,0.08)"},ticks:{color:GREY,callback:v=>v+" M"}},
+      y:{stacked:true,grid:{display:false},ticks:{color:"#1F2937",font:{size:11,weight:"600"}}}
+    }
+  }
+});
+
+const usdSum = REGIES.reduce((a,r)=>a+r.usd,0);
+const cdfEqSum = REGIES.reduce((a,r)=>a+r.cdf/FX,0);
+new Chart(document.getElementById("currencyPie"), {
+  type:"doughnut",
+  data:{labels:["Déclaré en USD","Déclaré en CDF (converti)"],datasets:[{data:[usdSum,cdfEqSum],backgroundColor:[BLUE,YELLOW],borderWidth:3,borderColor:"#FFF"}]},
+  options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{
+    legend:{position:"bottom",labels:{color:GREY,boxWidth:12,padding:12,font:{size:11,weight:"600"}}},
+    tooltip:{callbacks:{label:c => `${c.label}: ${(c.parsed/1e6).toFixed(1)} M USD (${((c.parsed/(usdSum+cdfEqSum))*100).toFixed(0)}%)`}}
+  }}
+});
+
+document.getElementById('searchBox').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('#entBody tr').forEach(tr => {
+    tr.classList.toggle('hidden-row', q && !tr.dataset.name.includes(q));
+  });
+});
+</script>
+</body>
+</html>
