@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import time
+import threading
 from datetime import datetime
 from typing import Any
 
@@ -31,10 +32,11 @@ SRC_2024  = "https://www.tsl-itierdc.org/tableau_de_bord_2024.php"
 FX_RATE_CDF = 2793.46
 CACHE_TTL = 300  # 5 minutes
 USER_AGENT = "Mozilla/5.0 (compatible; ITIE-RDC-TDB/1.0; +https://www.itierdc.net)"
-TIMEOUT = 60          # Le serveur T/SL est lent, on laisse 60 s
-MAX_RETRIES = 2       # Nombre de tentatives supplémentaires en cas d'échec
+TIMEOUT = 120         # Le serveur T/SL met 40-60 s à répondre, on laisse large
+MAX_RETRIES = 1       # 1 tentative + 1 retry
 
 _cache: dict[str, Any] = {"data": None, "ts": 0.0}
+_scrape_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -268,19 +270,46 @@ def _fallback_data() -> dict[str, Any]:
 
 def get_data() -> dict[str, Any]:
     now = time.time()
-    if _cache["data"] is None or (now - _cache["ts"]) > CACHE_TTL:
+    # Cache chaud → on sert immédiatement
+    if _cache["data"] is not None and (now - _cache["ts"]) < CACHE_TTL:
+        return _cache["data"]
+
+    # Cache à rafraîchir — un seul thread fait le scraping à la fois
+    with _scrape_lock:
+        now = time.time()
+        # Un autre thread a pu rafraîchir pendant qu'on attendait le lock
+        if _cache["data"] is not None and (now - _cache["ts"]) < CACHE_TTL:
+            return _cache["data"]
         try:
-            _cache["data"] = aggregate()
+            fresh = aggregate()
+            _cache["data"] = fresh
             _cache["ts"] = now
             log.info("Cache rafraîchi.")
+            return fresh
         except Exception as e:
             log.error("Rafraîchissement échoué : %s", e)
             if _cache["data"] is None:
-                # Première requête ratée : on sert une page "attente" plutôt
-                # que de retourner un 500 moche.
                 _cache["data"] = _fallback_data()
-                _cache["ts"] = now - CACHE_TTL + 60  # réessaie dans 1 min
-    return _cache["data"]
+                _cache["ts"] = now - CACHE_TTL + 10  # réessaie dans 10 s
+            return _cache["data"]
+
+
+def _warmup_in_background() -> None:
+    """Lance un premier scraping dès le démarrage du worker, pour que
+    le premier visiteur n'attende pas 50 s. Tourne dans un thread."""
+    def _run():
+        time.sleep(2)  # laisse Gunicorn finir de démarrer
+        log.info("Pré-chargement en arrière-plan…")
+        try:
+            get_data()
+            log.info("Pré-chargement terminé.")
+        except Exception as e:
+            log.warning("Pré-chargement échoué : %s", e)
+    threading.Thread(target=_run, daemon=True, name="warmup").start()
+
+
+# Démarre le pré-chargement dès l'import du module (= au boot Gunicorn)
+_warmup_in_background()
 
 
 # ---------------------------------------------------------------------------
