@@ -1,41 +1,40 @@
-# Tableau de bord ITIE-RDC — Suivi des télédéclarations 2024
+# Tableau de bord ITIE-RDC — Suivi des télédéclarations 2024 (version live)
 
 Refonte du tableau de bord de suivi des télédéclarations de l'Initiative pour la
 Transparence des Industries Extractives en République démocratique du Congo
-(ITIE-RDC). Cette page présente l'avancement des déclarations des 66 entreprises
-extractives du périmètre de réconciliation et des 179 structures (régies
-financières et entités perceptrices) qui perçoivent les flux issus des mines et
-hydrocarbures sur la plateforme T/SL de l'ITIE-RDC.
+(ITIE-RDC). Cette version récupère les données en temps réel depuis la
+plateforme T/SL de l'ITIE-RDC.
 
-## Contenu
+## Architecture
 
-- `index.html` — tableau de bord autonome (HTML, CSS, JavaScript). Aucun
-  back-end requis : la page tourne entièrement côté navigateur.
+- **Flask** (Python 3.11) sert la page.
+- À chaque requête, le serveur consulte son cache ; si celui-ci a plus de 5
+  minutes, il scrape les deux pages sources :
+  - `https://www.tsl-itierdc.org/tableau_de_bord/index.php`
+  - `https://www.tsl-itierdc.org/tableau_de_bord_2024.php`
+- Les données parsées sont agrégées et injectées dans le template Jinja.
+- Le taux de change CDF/USD retenu pour la campagne 2024 est **2 793,46**
+  (constante `FX_RATE_CDF` dans `app.py`).
 
-## Hébergement
+## Déploiement — Render
 
-Prévu pour un hébergement statique (Render, Netlify, Vercel, Cloudflare Pages,
-GitHub Pages). Aucun processus serveur, aucune base de données.
+Service de type **Web Service**, runtime **Python**, plan **free**. Les
+commandes de build et de démarrage sont dans `render.yaml`.
 
-## Mise à jour des données
+## Développement local
 
-Les chiffres de la campagne sont saisis dans le bloc `<script>` au bas de
-`index.html`, dans les tableaux `REGIES` (régies perceptrices) et `ENT`
-(entreprises déclarantes), ainsi que dans les constantes de synthèse
-(`enrolled`, `periReconT`, `periReconD`, etc.).
+```bash
+pip install -r requirements.txt
+python app.py
+# http://localhost:5000
+```
 
-Taux de change CDF/USD retenu pour la campagne 2024 : **2 793,46**
-(constante `FX` dans le script).
+## Fichiers
 
-## Charte graphique
-
-Alignée sur `itierdc.net` :
-
-- Bleu institutionnel : `#0068B4`
-- Bleu foncé : `#004F89`
-- Jaune or : `#FBB800`
-- Polices : Montserrat (titres) + Open Sans (corps)
-- Chart.js (CDN cdnjs) pour les graphiques
+- `app.py` — serveur Flask + scraper
+- `templates/index.html` — template de la page
+- `requirements.txt` — dépendances Python
+- `render.yaml` — configuration Render
 
 ## Licence
 
