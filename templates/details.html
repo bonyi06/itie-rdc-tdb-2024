@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Détails des déclarations ITIE-RDC — flux détaillés par régie, montants déclarés sociétés vs État.">
+<meta name="theme-color" content="#0068B4">
+<title>ITIE-RDC — Détails des déclarations</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230068B4'/%3E%3Ctext x='50' y='68' font-family='Arial,sans-serif' font-size='54' font-weight='800' text-anchor='middle' fill='%23FBB800'%3EI%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --itie-blue:#0068B4; --itie-blue-dark:#004F89; --itie-blue-light:#1A82D5; --itie-blue-top:#1898DD;
+  --itie-yellow:#FBB800; --itie-yellow-dark:#E6A800; --itie-yellow-text:#B37D00;
+  --fg:#1F2937; --fg-muted:#4B5563; --fg-dim:#6B7280;
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F3F6FA; --surface-3:#E5EDF5;
+  --border:#DBE3EC;
+  --ok:#16A34A; --ok-soft:#DCFCE7;
+  --warn:#D97706; --warn-soft:#FEF3C7;
+  --crit:#DC2626; --crit-soft:#FEE2E2;
+  --shadow-sm:0 1px 2px rgba(31,41,55,0.04);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#FFF;color:var(--fg);font-family:'Open Sans',system-ui,sans-serif;font-size:14px;line-height:1.55}
+h1,h2,h3,h4{font-family:'Montserrat',sans-serif;margin:0;letter-spacing:-0.01em}
+.num{font-variant-numeric:tabular-nums}
+
+.topbar{background:var(--itie-blue-top);color:#FFF;font-size:0.82rem;padding:7px max(16px,env(safe-area-inset-left,0px))}
+.topbar-inner{max-width:1500px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.topbar .contact{display:inline-flex;gap:20px;flex-wrap:wrap}
+
+.navbar{background:#FFF;padding:14px max(16px,env(safe-area-inset-left,0px));border-bottom:3px solid var(--surface-2);position:sticky;top:0;z-index:50}
+.navbar-inner{max-width:1500px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.logo{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.4rem;color:var(--itie-blue);text-decoration:none}
+.logo .lrdc{color:var(--itie-blue-light)}
+.nav-menu{display:flex;gap:6px;font-family:'Montserrat',sans-serif;font-size:0.9rem;font-weight:600}
+.nav-menu a{color:var(--fg);text-decoration:none;padding:8px 12px;border-radius:4px;white-space:nowrap}
+.nav-menu a:hover{color:var(--itie-blue);background:var(--surface-2)}
+.nav-menu a.active{color:var(--itie-blue);border-bottom:2px solid var(--itie-yellow);border-radius:0}
+@media(max-width:980px){.nav-menu{display:none}}
+
+.hero{background:linear-gradient(135deg,rgba(0,104,180,0.95),rgba(0,79,137,0.95)),var(--itie-blue);color:#FFF;padding:30px max(16px,env(safe-area-inset-left,0px))}
+.hero-inner{max-width:1500px;margin:0 auto}
+.hero h1{font-size:clamp(1.5rem,2.8vw,2.1rem);font-weight:800;margin-bottom:6px}
+.hero h1 .accent{color:var(--itie-yellow)}
+.hero p{font-size:0.95rem;color:rgba(255,255,255,0.9);margin:0}
+
+.filters-bar{background:var(--surface-2);padding:18px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--border);position:sticky;top:68px;z-index:40}
+.filters-inner{max-width:1500px;margin:0 auto;display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.filter-group{display:flex;flex-direction:column;gap:4px}
+.filter-group label{font-family:'Montserrat',sans-serif;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--itie-blue)}
+.filter-group select,.filter-group input{background:#FFF;color:var(--fg);border:1.5px solid var(--border);padding:8px 12px;border-radius:4px;font:inherit;font-size:0.88rem;min-width:160px}
+.filter-group select:focus,.filter-group input:focus{outline:0;border-color:var(--itie-blue);box-shadow:0 0 0 3px rgba(0,104,180,0.1)}
+.filter-group.search input{min-width:260px}
+.btn-apply{background:var(--itie-yellow);color:#1F2937;border:0;padding:9px 20px;border-radius:4px;font:600 0.9rem 'Montserrat',sans-serif;cursor:pointer}
+.btn-apply:hover{background:var(--itie-yellow-dark)}
+.btn-export{background:var(--itie-blue);color:#FFF;border:0;padding:9px 18px;border-radius:4px;font:600 0.85rem 'Montserrat',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-export:hover{background:var(--itie-blue-dark)}
+
+.kpi-strip{background:#FFF;padding:20px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--border)}
+.kpi-strip-inner{max-width:1500px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.kpi-tile{text-align:center;padding:10px}
+.kpi-tile .v{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:var(--itie-blue);line-height:1.1}
+.kpi-tile .v .u{font-size:0.72rem;color:var(--fg-dim);font-weight:600;margin-left:3px}
+.kpi-tile .l{color:var(--fg-muted);font-size:0.78rem;margin-top:4px}
+.kpi-tile.highlight .v{color:var(--itie-yellow-text)}
+.kpi-tile.pos .v{color:var(--ok)}
+.kpi-tile.neg .v{color:var(--crit)}
+
+.content{max-width:1500px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left,0px)) 40px}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-bottom:14px;padding-bottom:10px;border-bottom:3px solid var(--surface-3)}
+.sec-head h2{font-size:1.3rem;font-weight:700;color:var(--itie-blue)}
+.sec-head h2::before{content:"";display:inline-block;width:4px;height:1.1em;background:var(--itie-yellow);margin-right:10px;vertical-align:-3px;border-radius:2px}
+.sec-note{color:var(--fg-muted);font-size:0.9rem}
+
+.counter-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft, #E6ECF5);color:var(--itie-blue);padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600}
+
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);background:#FFF;box-shadow:var(--shadow-sm);max-height:72vh}
+table{width:100%;border-collapse:collapse;font-size:0.84rem}
+thead th{text-align:left;background:var(--itie-blue);color:#FFF;font-family:'Montserrat',sans-serif;font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;padding:11px 10px;white-space:nowrap;position:sticky;top:0;z-index:3}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th.sortable::after{content:" ⇅";opacity:0.4;font-size:0.9em}
+thead th.sort-asc::after{content:" ▲";opacity:1}
+thead th.sort-desc::after{content:" ▼";opacity:1}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--surface-3)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+tbody tr.regie-row td{background:var(--surface-2);font-weight:700;color:var(--itie-blue);font-family:'Montserrat',sans-serif;font-size:0.82rem;position:sticky;left:0}
+.flux-name{font-weight:500;color:var(--fg);max-width:420px}
+.flux-name small{color:var(--fg-dim);font-weight:400}
+.right{text-align:right}
+.num-cell{font-variant-numeric:tabular-nums}
+.diff-pos{color:var(--ok);font-weight:600}
+.diff-neg{color:var(--crit);font-weight:600}
+.diff-zero{color:var(--fg-dim)}
+
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.85);display:none;align-items:center;justify-content:center;z-index:200;font-family:'Montserrat',sans-serif;color:var(--itie-blue);flex-direction:column;gap:14px}
+.loading-overlay.visible{display:flex}
+.spinner{width:48px;height:48px;border:4px solid var(--surface-3);border-top-color:var(--itie-blue);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:20px 0}
+.summary-card{background:#FFF;border:1px solid var(--border);border-radius:10px;padding:16px 20px;box-shadow:var(--shadow-sm)}
+.summary-card h4{color:var(--itie-blue);font-size:0.95rem;margin-bottom:10px}
+.summary-card .row{display:flex;justify-content:space-between;padding:4px 0;font-size:0.86rem}
+.summary-card .row .label{color:var(--fg-muted)}
+.summary-card .row .value{font-variant-numeric:tabular-nums;font-weight:600}
+
+.site-footer{background:var(--itie-blue-dark);color:rgba(255,255,255,0.85);padding:28px max(16px,env(safe-area-inset-left,0px)) 20px;margin-top:40px}
+.footer-inner{max-width:1500px;margin:0 auto;font-size:0.84rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.site-footer a{color:#FFF;text-decoration:none}
+.site-footer a:hover{color:var(--itie-yellow)}
+
+.notice{background:var(--warn-soft);border-left:4px solid var(--warn);padding:12px 16px;border-radius:4px;margin-bottom:16px;color:var(--fg)}
+.notice-crit{background:var(--crit-soft);border-left:4px solid var(--crit)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="contact">
+      <span>📞 +243 824 855 057</span>
+      <span>✉ secretariat@itierdc.org</span>
+    </div>
+    <div>Scrapé le : <strong>{{ data.scraped_at }}</strong></div>
+  </div>
+</div>
+
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="logo">ITIE<span class="lrdc">RDC</span></a>
+    <div class="nav-menu">
+      <a href="https://www.itierdc.net" target="_blank" rel="noopener">Site ITIE-RDC</a>
+      <a href="/">Suivi des déclarations</a>
+      <a href="/details" class="active">Détails des déclarations</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Détails des <span class="accent">déclarations</span> ITIE</h1>
+    <p>Flux détaillés par régie et par taxe — montants déclarés par les sociétés et par l'État, écarts, ajustements, après rapprochement.</p>
+  </div>
+</section>
+
+<!-- FILTRES -->
+<form class="filters-bar" method="GET" action="/details" id="filtersForm">
+  <div class="filters-inner">
+    <div class="filter-group">
+      <label for="year">Année fiscale</label>
+      <select name="year" id="year">
+        {% for y in years %}
+          <option value="{{ y }}" {% if y == data.year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="report">Type de reporting</label>
+      <select name="report" id="report">
+        {% for v, lab in report_labels.items() %}
+          <option value="{{ v }}" {% if v == data.reportselect %}selected{% endif %}>{{ lab }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="perim">Périmètre</label>
+      <select name="perim" id="perim">
+        {% for v, lab in perim_labels.items() %}
+          <option value="{{ v }}" {% if v == data.perimetre %}selected{% endif %}>{{ lab }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group search">
+      <label for="search">Rechercher (régie ou flux)</label>
+      <input type="search" id="search" placeholder="DGI, Royalties, Taxe…" autocomplete="off">
+    </div>
+    <div class="filter-group">
+      <label for="minAmount">Montant min (USD)</label>
+      <input type="number" id="minAmount" placeholder="0" step="1000" style="min-width:120px">
+    </div>
+    <div class="filter-group">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn-apply">Appliquer</button>
+    </div>
+    <div class="filter-group" style="margin-left:auto">
+      <label>&nbsp;</label>
+      <button type="button" class="btn-export" id="exportCsv">⬇ Exporter CSV</button>
+    </div>
+  </div>
+</form>
+
+{% if data.error %}
+<div class="notice notice-crit" style="margin:16px auto;max-width:1500px;">
+  <strong>Source ITIE temporairement indisponible.</strong> La plateforme T/SL n'a pas répondu dans les temps.
+  Les filtres ci-dessous relanceront une tentative. Détail technique : <code>{{ data.error }}</code>
+</div>
+{% endif %}
+
+<!-- KPI -->
+<div class="kpi-strip">
+  <div class="kpi-strip-inner">
+    <div class="kpi-tile">
+      <div class="v num">{{ data.totals.nb_regies or 0 }}</div>
+      <div class="l">Régies perceptrices</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="v num">{{ data.totals.nb_flux or 0 }}</div>
+      <div class="l">Lignes de flux</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="v num">{{ "{:,.0f}".format((data.totals.sum_soc_fin or 0) / 1e6).replace(",", " ") }}<span class="u">M USD</span></div>
+      <div class="l">Déclaré par Sociétés (après ajust.)</div>
+    </div>
+    <div class="kpi-tile">
+      <div class="v num">{{ "{:,.0f}".format((data.totals.sum_etat_fin or 0) / 1e6).replace(",", " ") }}<span class="u">M USD</span></div>
+      <div class="l">Déclaré par l'État (après ajust.)</div>
+    </div>
+    <div class="kpi-tile {% if (data.totals.sum_diff_fin or 0) >= 0 %}pos{% else %}neg{% endif %}">
+      <div class="v num">{{ "{:,.0f}".format((data.totals.sum_diff_fin or 0) / 1e6).replace(",", " ") }}<span class="u">M USD</span></div>
+      <div class="l">Écart final (Soc – État)</div>
+    </div>
+    <div class="kpi-tile highlight">
+      <div class="v" style="font-size:1.1rem">{{ data.year }}</div>
+      <div class="l">{{ data.report_label }} · {{ data.perimetre_label }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABLE -->
+<div class="content">
+  <div class="sec-head">
+    <h2>Tableau détaillé des flux</h2>
+    <span class="sec-note">
+      <span class="counter-chip" id="counterChip">{{ data.flux|length }} flux affichés sur {{ data.flux|length }}</span>
+      <span style="margin-left:12px;">Cliquer sur l'en-tête d'une colonne pour trier</span>
+    </span>
+  </div>
+
+  {% if data.flux %}
+  <div class="table-wrap">
+    <table id="fluxTable">
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th class="sortable" data-key="regie">Régie</th>
+          <th class="sortable" data-key="flux">Flux / Taxe</th>
+          <th class="sortable right" data-key="soc_decl">Déclaré Sociétés</th>
+          <th class="sortable right" data-key="etat_decl">Déclaré État</th>
+          <th class="sortable right" data-key="diff_decl">Écart initial</th>
+          <th class="sortable right" data-key="soc_fin">Final Sociétés</th>
+          <th class="sortable right" data-key="etat_fin">Final État</th>
+          <th class="sortable right" data-key="diff_fin">Écart final</th>
+        </tr>
+      </thead>
+      <tbody id="fluxBody"></tbody>
+    </table>
+  </div>
+
+  <!-- SOUS-TOTAUX PAR RÉGIE -->
+  <div style="margin-top:30px">
+    <div class="sec-head">
+      <h2>Sous-totaux par régie</h2>
+      <span class="sec-note">Classement des régies par montant final déclaré par l'État</span>
+    </div>
+    <div class="summary-cards" id="regiesSummary"></div>
+  </div>
+
+  {% else %}
+  <div class="notice">
+    Aucune donnée pour cette combinaison de filtres. Essayez un autre périmètre ou une autre année.
+  </div>
+  {% endif %}
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span>© {{ data.year }} ITIE-RDC — Secrétariat technique</span>
+    <span>Source live : plateforme T/SL · Cache serveur 30 min</span>
+  </div>
+</footer>
+
+<div class="loading-overlay" id="loader">
+  <div class="spinner"></div>
+  <div>Chargement — la plateforme T/SL met jusqu'à 60 secondes à répondre…</div>
+</div>
+
+<script>
+const FLUX = {{ data.flux | tojson }};
+const REGIES = {{ data.regies | tojson }};
+const YEAR = {{ data.year }};
+const REPORT_LABEL = {{ data.report_label | tojson }};
+const PERIM_LABEL = {{ data.perimetre_label | tojson }};
+
+const fmt0 = n => (n || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+const fmtDiff = n => {
+  const v = n || 0;
+  const cls = v > 0 ? 'diff-pos' : (v < 0 ? 'diff-neg' : 'diff-zero');
+  const sign = v > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${fmt0(v)}</span>`;
+};
+
+let filtered = [...FLUX];
+let sortKey = null;
+let sortAsc = true;
+
+function render() {
+  const tbody = document.getElementById('fluxBody');
+  if (!tbody) return;
+  const rows = [];
+  let currentRegie = null;
+  for (const f of filtered) {
+    if (f.regie !== currentRegie) {
+      // Group header
+      const sub = REGIES.find(r => r.name === f.regie);
+      if (sub) {
+        rows.push(`<tr class="regie-row"><td></td><td colspan="2">${f.regie}</td>
+          <td class="right num-cell">${fmt0(sub.soc_decl)}</td>
+          <td class="right num-cell">${fmt0(sub.etat_decl)}</td>
+          <td class="right num-cell">${fmtDiff(sub.diff_decl)}</td>
+          <td class="right num-cell">${fmt0(sub.soc_fin)}</td>
+          <td class="right num-cell">${fmt0(sub.etat_fin)}</td>
+          <td class="right num-cell">${fmtDiff(sub.diff_fin)}</td>
+          </tr>`);
+      } else {
+        rows.push(`<tr class="regie-row"><td></td><td colspan="8">${f.regie}</td></tr>`);
+      }
+      currentRegie = f.regie;
+    }
+    rows.push(`<tr>
+      <td class="num-cell" style="color:var(--fg-dim)">${f.no}</td>
+      <td style="color:var(--fg-dim);font-size:0.76rem">${f.regie}</td>
+      <td class="flux-name">${f.flux}</td>
+      <td class="right num-cell">${fmt0(f.soc_decl)}</td>
+      <td class="right num-cell">${fmt0(f.etat_decl)}</td>
+      <td class="right num-cell">${fmtDiff(f.diff_decl)}</td>
+      <td class="right num-cell">${fmt0(f.soc_fin)}</td>
+      <td class="right num-cell">${fmt0(f.etat_fin)}</td>
+      <td class="right num-cell">${fmtDiff(f.diff_fin)}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('');
+  document.getElementById('counterChip').textContent = `${filtered.length} flux affichés sur ${FLUX.length}`;
+}
+
+function applyFilters() {
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  const minAmt = parseFloat(document.getElementById('minAmount').value) || 0;
+  filtered = FLUX.filter(f => {
+    if (q && !((f.regie + ' ' + f.flux).toLowerCase().includes(q))) return false;
+    const maxVal = Math.max(Math.abs(f.soc_fin || 0), Math.abs(f.etat_fin || 0));
+    if (minAmt > 0 && maxVal < minAmt) return false;
+    return true;
+  });
+  if (sortKey) sortFiltered();
+  render();
+}
+
+function sortFiltered() {
+  filtered.sort((a, b) => {
+    const va = a[sortKey], vb = b[sortKey];
+    const isNum = typeof va === 'number';
+    const cmp = isNum ? (va - vb) : String(va || '').localeCompare(String(vb || ''));
+    return sortAsc ? cmp : -cmp;
+  });
+}
+
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (sortKey === key) sortAsc = !sortAsc;
+    else { sortKey = key; sortAsc = true; }
+    document.querySelectorAll('th.sortable').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+    sortFiltered();
+    render();
+  });
+});
+
+document.getElementById('search').addEventListener('input', applyFilters);
+document.getElementById('minAmount').addEventListener('input', applyFilters);
+
+// Résumé par régie (triées par montant final État)
+function renderSummary() {
+  const container = document.getElementById('regiesSummary');
+  if (!container) return;
+  const sorted = [...REGIES].sort((a, b) => Math.abs(b.etat_fin || 0) - Math.abs(a.etat_fin || 0)).slice(0, 12);
+  container.innerHTML = sorted.map(r => `
+    <div class="summary-card">
+      <h4>${r.name}</h4>
+      <div class="row"><span class="label">Soc. (final)</span><span class="value">${fmt0(r.soc_fin)}</span></div>
+      <div class="row"><span class="label">État (final)</span><span class="value">${fmt0(r.etat_fin)}</span></div>
+      <div class="row"><span class="label">Écart</span><span class="value">${fmtDiff(r.diff_fin)}</span></div>
+    </div>
+  `).join('');
+}
+
+// Export CSV
+document.getElementById('exportCsv').addEventListener('click', () => {
+  const header = ['N°', 'Régie', 'Flux', 'Soc_decl', 'Etat_decl', 'Diff_decl', 'Soc_adj', 'Etat_adj', 'Diff_adj', 'Soc_fin', 'Etat_fin', 'Diff_fin'];
+  const lines = [header.join(';')];
+  for (const f of filtered) {
+    lines.push([
+      f.no, '"' + f.regie.replace(/"/g, '""') + '"',
+      '"' + (f.flux || '').replace(/"/g, '""') + '"',
+      f.soc_decl, f.etat_decl, f.diff_decl,
+      f.soc_adj, f.etat_adj, f.diff_adj,
+      f.soc_fin, f.etat_fin, f.diff_fin
+    ].join(';'));
+  }
+  const csv = '﻿' + lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `itie_flux_${YEAR}_${REPORT_LABEL.replace(/\s+/g, '_')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+});
+
+// Loader lorsque le formulaire est soumis
+document.getElementById('filtersForm').addEventListener('submit', () => {
+  document.getElementById('loader').classList.add('visible');
+});
+
+// Démarrage
+render();
+renderSummary();
+</script>
+</body>
+</html>
