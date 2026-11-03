@@ -163,14 +163,16 @@ def scrape_2024() -> list[dict[str, Any]]:
     tbody = table.find("tbody") or table
     date_re = re.compile(r"\d{1,2}/\d{1,2}")
     for tr in tbody.find_all("tr"):
-        cells = tr.find_all("td")
+        # Le site utilise <th> pour les 3 premières colonnes (No, NIF, Entreprise)
+        # et <td> pour les 155 colonnes de régies.
+        cells = tr.find_all(["th", "td"])
         if len(cells) < 4:
             continue
         no = cells[0].get_text(strip=True)
         nif = cells[1].get_text(strip=True)
         name = cells[2].get_text(strip=True)
-        if not name:
-            continue
+        if not name or name.lower() == "entreprises":
+            continue  # saute la ligne d'en-tête
         touched = 0
         last_date = "—"
         for c in cells[3:]:
@@ -222,7 +224,9 @@ def scrape_2024_matrix() -> dict[str, Any]:
     nb_invalid = 0
 
     for tr in rows[1:]:
-        cells = tr.find_all("td")
+        # Le site utilise <th> pour les 3 premières colonnes (No, NIF, Entreprise)
+        # et <td> pour les 155 colonnes de régies. On lit les deux.
+        cells = tr.find_all(["th", "td"])
         if len(cells) < 4:
             continue
         no = cells[0].get_text(strip=True)
