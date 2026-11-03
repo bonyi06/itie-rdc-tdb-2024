@@ -1,7 +1,7 @@
 """
 Tableau de bord ITIE-RDC — Suivi des télédéclarations 2024 (version live).
 
-Scrape les deux pages du T/SL de l'ITIE-RDC toutes les 5 minutes et affiche
+Scrape les sources T/SL de l'ITIE-RDC toutes les 5 minutes et affiche
 le tableau de bord avec les chiffres frais.
 
 Déploiement : Render Web Service (plan free, Python 3.11).
@@ -33,6 +33,7 @@ SRC_ETATS = "https://www.tsl-itierdc.org/etats/"
 FX_RATE_CDF = 2793.46
 CACHE_TTL = 300             # 5 minutes pour les tableaux de bord
 CACHE_TTL_DETAILS = 1800    # 30 minutes pour les flux détaillés (coûteux à scraper)
+CACHE_TTL_SUIVI = 900       # 15 minutes pour la page de suivi (3 scrapings combinés)
 USER_AGENT = "Mozilla/5.0 (compatible; ITIE-RDC-TDB/1.0; +https://www.itierdc.net)"
 TIMEOUT = 120         # Le serveur T/SL met 40-60 s à répondre, on laisse large
 MAX_RETRIES = 1       # 1 tentative + 1 retry
@@ -44,13 +45,17 @@ _scrape_lock = threading.Lock()
 _details_cache: dict[tuple, dict] = {}
 _details_lock = threading.Lock()
 
+# Cache séparé pour la page Suivi (matrice + par-ese + flux)
+_suivi_cache: dict[str, Any] = {"data": None, "ts": 0.0}
+_suivi_lock = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 def parse_number(s: str) -> float:
     """Convertit « 1 018 813 842,45 » → 1018813842.45."""
-    s = re.sub(r"[\s ]", "", s or "").replace(",", ".")
+    s = re.sub(r"[\s ]", "", s or "").replace(",", ".")
     try:
         return float(s)
     except (TypeError, ValueError):
@@ -147,7 +152,8 @@ def scrape_index() -> dict[str, list[dict[str, Any]]]:
 
 
 def scrape_2024() -> list[dict[str, Any]]:
-    """Parse la matrice entreprises × régies de /tableau_de_bord_2024.php."""
+    """Parse la matrice entreprises × régies de /tableau_de_bord_2024.php.
+    Compte les déclarations sans détail (version utilisée par /)."""
     html = fetch(SRC_2024)
     soup = BeautifulSoup(html, "lxml")
     table = soup.find("table")
@@ -178,6 +184,97 @@ def scrape_2024() -> list[dict[str, Any]]:
             "st": "crit" if touched == 0 else ("ok" if touched >= 7 else "warn"),
         })
     return entities
+
+
+def scrape_2024_matrix() -> dict[str, Any]:
+    """Parse la matrice complète entreprises × régies de /tableau_de_bord_2024.php.
+
+    Retourne :
+      - regies   : liste des noms de régies (ordre colonnes)
+      - entreprises : liste d'entreprises avec, pour chaque, la liste des
+                      déclarations (régie, date, validé).
+
+    Le site encode le statut par couleur de fond :
+      - #00FF00 (vert) = validé
+      - #FF0000 (rouge) = non validé
+    """
+    html = fetch(SRC_2024)
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table")
+    if not table:
+        return {"regies": [], "entreprises": [], "declarations": [],
+                "nb_valid": 0, "nb_invalid": 0}
+
+    rows = table.find_all("tr")
+    if not rows:
+        return {"regies": [], "entreprises": [], "declarations": [],
+                "nb_valid": 0, "nb_invalid": 0}
+
+    # Ligne entête : No | NIF | Entreprises | <régies...>
+    header_cells = rows[0].find_all(["th", "td"])
+    headers = [c.get_text(strip=True) for c in header_cells]
+    regies = headers[3:] if len(headers) > 3 else []
+
+    entreprises: list[dict[str, Any]] = []
+    declarations: list[dict[str, Any]] = []
+    date_re = re.compile(r"\d{1,2}/\d{1,2}")
+    nb_valid = 0
+    nb_invalid = 0
+
+    for tr in rows[1:]:
+        cells = tr.find_all("td")
+        if len(cells) < 4:
+            continue
+        no = cells[0].get_text(strip=True)
+        nif = cells[1].get_text(strip=True)
+        name = cells[2].get_text(strip=True)
+        if not name:
+            continue
+        ent_decls: list[dict[str, Any]] = []
+        for i, c in enumerate(cells[3:]):
+            txt = c.get_text(strip=True)
+            if not date_re.match(txt):
+                continue
+            style = (c.get("style") or "").lower().replace(" ", "")
+            validated = "#00ff00" in style
+            invalidated = "#ff0000" in style
+            regie_name = regies[i] if i < len(regies) else f"col{i}"
+            d = {
+                "regie": regie_name,
+                "date": txt,
+                "validated": validated,
+                "status": "valid" if validated else ("invalid" if invalidated else "unknown"),
+            }
+            ent_decls.append(d)
+            declarations.append({"entreprise": name, "nif": nif, **d})
+            if validated:
+                nb_valid += 1
+            elif invalidated:
+                nb_invalid += 1
+
+        last_date = ent_decls[-1]["date"] if ent_decls else "—"
+        nb_touched = len(ent_decls)
+        nb_v = sum(1 for d in ent_decls if d["validated"])
+        nb_nv = nb_touched - nb_v
+        entreprises.append({
+            "no": no, "nif": nif, "name": name,
+            "nb_regies": nb_touched,
+            "nb_valid": nb_v,
+            "nb_invalid": nb_nv,
+            "last_date": last_date,
+            "declarations": ent_decls,
+            "status": "crit" if nb_touched == 0 else (
+                "ok" if (nb_touched > 0 and nb_nv == 0) else "warn"
+            ),
+        })
+
+    return {
+        "regies": regies,
+        "entreprises": entreprises,
+        "declarations": declarations,
+        "nb_valid": nb_valid,
+        "nb_invalid": nb_invalid,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -384,12 +481,10 @@ def parse_etats_flux(html: str) -> dict[str, Any]:
         if not cells:
             continue
         texts = [c.get_text(strip=True) for c in cells]
-        # Ligne entête de régie : premier td sans numéro, structure "NOM (CODE)"
-        is_header = tr.get("class") and any("header" in c.lower() or "regie" in c.lower() or "group" in c.lower() for c in tr.get("class"))
         first = texts[0]
         is_num_row = first.isdigit()
         if not is_num_row and len(cells) >= 10:
-            # C'est probablement une ligne de régie (groupement)
+            # Ligne de régie (groupement)
             current_regie = first
             try:
                 regies.append({
@@ -438,6 +533,102 @@ def parse_etats_flux(html: str) -> dict[str, Any]:
     return {"regies": regies, "flux": flux, "totals": totals}
 
 
+def parse_etats_par_ese(html: str) -> dict[str, Any]:
+    """Parse le tableau 'Reporting par entreprise' retourné par /etats/.
+
+    Structure :
+      - lignes `.entete.header_line` : secteur (SECTEUR PÉTROLIER, SECTEUR MINIER, …)
+      - lignes `.regieline` : type d'entreprise (ENTREPRISE DE L'ETAT, PRIVÉE, …)
+      - lignes vides ou `.odd` : entreprises individuelles
+      - lignes `.totalLine` : totaux
+    """
+    soup = BeautifulSoup(html, "lxml")
+    entreprises: list[dict[str, Any]] = []
+    secteurs: dict[str, dict[str, Any]] = {}
+
+    current_secteur: str = "—"
+    current_type: str = "—"
+
+    for table in soup.find_all("table"):
+        for tr in table.find_all("tr"):
+            cells = tr.find_all("td")
+            if not cells:
+                continue
+            classes = tr.get("class") or []
+            classes_str = " ".join(classes).lower()
+            texts = [c.get_text(strip=True) for c in cells]
+            first = texts[0]
+
+            if "entete" in classes_str or "header_line" in classes_str:
+                # Il y a deux lignes 'entete header_line' par secteur :
+                # (1) le nom du secteur + "Montants initalements déclarés" (~4 cellules)
+                # (2) les sous-entêtes "Sociétés / Etat / Différence" répétés (9 cellules)
+                # On ne garde que la première.
+                sub_header_tokens = ("sociétés", "societes", "etat", "état",
+                                     "différence", "difference")
+                first_low = first.lower()
+                is_sub_header = first_low in sub_header_tokens or len(cells) >= 9
+                if first and not is_sub_header and "montant" not in first_low:
+                    current_secteur = first
+                    if current_secteur not in secteurs:
+                        secteurs[current_secteur] = {"name": current_secteur,
+                                                     "soc_fin": 0, "etat_fin": 0,
+                                                     "diff_fin": 0, "nb_ent": 0}
+                continue
+
+            if "regieline" in classes_str:
+                # Type d'entreprise (ENTREPRISE DE L'ETAT, PRIVÉE, etc.)
+                if first:
+                    current_type = first
+                continue
+
+            if "totalline" in classes_str:
+                continue
+
+            # Ligne d'entreprise individuelle
+            if len(cells) < 10:
+                continue
+            name = first
+            if not name:
+                continue
+            try:
+                ent = {
+                    "name": name,
+                    "secteur": current_secteur,
+                    "type": current_type,
+                    "soc_decl":  parse_number(texts[1]),
+                    "etat_decl": parse_number(texts[2]),
+                    "diff_decl": parse_number(texts[3]),
+                    "soc_adj":   parse_number(texts[4]),
+                    "etat_adj":  parse_number(texts[5]),
+                    "diff_adj":  parse_number(texts[6]),
+                    "soc_fin":   parse_number(texts[7]),
+                    "etat_fin":  parse_number(texts[8]),
+                    "diff_fin":  parse_number(texts[9]),
+                }
+                entreprises.append(ent)
+                s = secteurs.setdefault(current_secteur, {"name": current_secteur,
+                                                          "soc_fin": 0, "etat_fin": 0,
+                                                          "diff_fin": 0, "nb_ent": 0})
+                s["soc_fin"]  += ent["soc_fin"]
+                s["etat_fin"] += ent["etat_fin"]
+                s["diff_fin"] += ent["diff_fin"]
+                s["nb_ent"]   += 1
+            except (IndexError, ValueError):
+                pass
+
+    totals = {
+        "nb_ent": len(entreprises),
+        "nb_secteurs": len(secteurs),
+        "sum_soc_fin":  sum(e["soc_fin"]  for e in entreprises),
+        "sum_etat_fin": sum(e["etat_fin"] for e in entreprises),
+        "sum_diff_fin": sum(e["diff_fin"] for e in entreprises),
+    }
+    return {"entreprises": entreprises,
+            "secteurs": list(secteurs.values()),
+            "totals": totals}
+
+
 def get_details(year: int, reportselect: str, perimetre: str = "") -> dict[str, Any]:
     """Récupère les données détaillées avec cache long + verrou."""
     key = (year, reportselect, perimetre)
@@ -476,6 +667,167 @@ def get_details(year: int, reportselect: str, perimetre: str = "") -> dict[str, 
 
 
 # ---------------------------------------------------------------------------
+# Page Suivi — matrice + stats par entreprise/régie + rapprochement montants
+# ---------------------------------------------------------------------------
+def _norm(s: str) -> str:
+    """Normalise un nom pour matcher entreprises et régies entre sources."""
+    s = (s or "").upper().strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def build_suivi() -> dict[str, Any]:
+    """Agrège : matrice (dates/statut) + flux (montants par régie) +
+    par-entreprise (totaux par entreprise). Fait 3 appels web."""
+    log.info("Build suivi (3 scrapings) …")
+    try:
+        mat = scrape_2024_matrix()
+    except Exception as e:
+        log.error("Scrape matrix 2024 : %s", e)
+        mat = {"regies": [], "entreprises": [], "declarations": [], "nb_valid": 0, "nb_invalid": 0}
+
+    try:
+        flux_data = get_details(2024, "decla-flux-global", "")
+    except Exception as e:
+        log.warning("Flux global KO : %s", e)
+        flux_data = {"regies": [], "flux": [], "totals": {}}
+
+    try:
+        html = fetch_etats(2024, "decla-par-ese", "", "")
+        parese = parse_etats_par_ese(html)
+    except Exception as e:
+        log.warning("Par-ese KO : %s", e)
+        parese = {"entreprises": [], "secteurs": [], "totals": {}}
+
+    # Montants par régie (depuis flux-global)
+    montants_par_regie = {}
+    for r in flux_data.get("regies", []):
+        montants_par_regie[_norm(r["name"])] = r
+
+    # Montants par entreprise (depuis par-ese)
+    montants_par_ent = {}
+    for e in parese["entreprises"]:
+        montants_par_ent[_norm(e["name"])] = e
+
+    # Enrichit chaque entreprise de la matrice avec son montant total
+    ents = mat["entreprises"]
+    for e in ents:
+        m = montants_par_ent.get(_norm(e["name"]))
+        if m:
+            e["soc_fin"]  = m["soc_fin"]
+            e["etat_fin"] = m["etat_fin"]
+            e["diff_fin"] = m["diff_fin"]
+            e["secteur"]  = m.get("secteur", "—")
+            e["type"]     = m.get("type", "—")
+        else:
+            e["soc_fin"] = 0
+            e["etat_fin"] = 0
+            e["diff_fin"] = 0
+            e["secteur"] = "—"
+            e["type"] = "—"
+
+    # Compte par régie : combien d'entreprises déclarantes, combien validées
+    regies_stats = {}
+    for name in mat["regies"]:
+        regies_stats[name] = {
+            "name": name,
+            "nb_ent": 0, "nb_valid": 0, "nb_invalid": 0,
+            "last_date": "—",
+            "entreprises": [],  # liste des entreprises déclarantes
+            "soc_fin":  0, "etat_fin": 0, "diff_fin": 0,
+        }
+    for d in mat["declarations"]:
+        rs = regies_stats.get(d["regie"])
+        if not rs:
+            continue
+        rs["nb_ent"] += 1
+        if d["validated"]:
+            rs["nb_valid"] += 1
+        elif d["status"] == "invalid":
+            rs["nb_invalid"] += 1
+        rs["entreprises"].append({"name": d["entreprise"], "nif": d["nif"],
+                                  "date": d["date"], "validated": d["validated"]})
+        if d["date"] > rs["last_date"]:
+            rs["last_date"] = d["date"]
+
+    # Jointure montants par régie (sur name normalisé)
+    for name, rs in regies_stats.items():
+        m = montants_par_regie.get(_norm(name))
+        if m:
+            rs["soc_fin"]  = m["soc_fin"]
+            rs["etat_fin"] = m["etat_fin"]
+            rs["diff_fin"] = m["diff_fin"]
+
+    regies_list = sorted(regies_stats.values(), key=lambda r: (-r["nb_ent"], r["name"]))
+
+    # KPIs globaux
+    nb_declarations = len(mat["declarations"])
+    nb_valid = mat["nb_valid"]
+    nb_invalid = mat["nb_invalid"]
+    nb_ent_actifs = sum(1 for e in ents if e["nb_regies"] > 0)
+    nb_ent_total = len(ents)
+    nb_regies_actives = sum(1 for r in regies_list if r["nb_ent"] > 0)
+    nb_regies_total = len(regies_list)
+    pct_valid = (nb_valid / nb_declarations * 100) if nb_declarations else 0
+
+    totals_flux = flux_data.get("totals", {})
+    totals_ese = parese.get("totals", {})
+
+    return {
+        "entreprises": ents,
+        "regies": regies_list,
+        "regies_names": mat["regies"],
+        "declarations": mat["declarations"],
+        "flux": flux_data.get("flux", []),
+        "secteurs": parese.get("secteurs", []),
+        "kpi": {
+            "nb_declarations": nb_declarations,
+            "nb_valid": nb_valid,
+            "nb_invalid": nb_invalid,
+            "pct_valid": pct_valid,
+            "nb_ent_actifs": nb_ent_actifs,
+            "nb_ent_total": nb_ent_total,
+            "nb_regies_actives": nb_regies_actives,
+            "nb_regies_total": nb_regies_total,
+            "sum_soc_fin":  totals_ese.get("sum_soc_fin",  0),
+            "sum_etat_fin": totals_ese.get("sum_etat_fin", 0),
+            "sum_diff_fin": totals_ese.get("sum_diff_fin", 0),
+        },
+        "scraped_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+    }
+
+
+def get_suivi() -> dict[str, Any]:
+    now = time.time()
+    if _suivi_cache["data"] is not None and (now - _suivi_cache["ts"]) < CACHE_TTL_SUIVI:
+        return _suivi_cache["data"]
+    with _suivi_lock:
+        now = time.time()
+        if _suivi_cache["data"] is not None and (now - _suivi_cache["ts"]) < CACHE_TTL_SUIVI:
+            return _suivi_cache["data"]
+        try:
+            fresh = build_suivi()
+            _suivi_cache["data"] = fresh
+            _suivi_cache["ts"] = now
+            log.info("Cache Suivi rafraîchi.")
+            return fresh
+        except Exception as e:
+            log.error("Échec build_suivi : %s", e)
+            if _suivi_cache["data"] is not None:
+                return _suivi_cache["data"]
+            return {
+                "entreprises": [], "regies": [], "regies_names": [],
+                "declarations": [], "flux": [], "secteurs": [],
+                "kpi": {"nb_declarations": 0, "nb_valid": 0, "nb_invalid": 0,
+                        "pct_valid": 0, "nb_ent_actifs": 0, "nb_ent_total": 0,
+                        "nb_regies_actives": 0, "nb_regies_total": 0,
+                        "sum_soc_fin": 0, "sum_etat_fin": 0, "sum_diff_fin": 0},
+                "scraped_at": datetime.now().strftime("%d/%m/%Y %H:%M") + " — données ITIE indisponibles",
+                "error": str(e),
+            }
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -489,6 +841,8 @@ def refresh():
     """Force la mise à jour du cache (passer ?token=XXX en prod si besoin)."""
     _cache["data"] = None
     _cache["ts"] = 0
+    _suivi_cache["data"] = None
+    _suivi_cache["ts"] = 0
     get_data()
     return "Cache rafraîchi — <a href='/'>retour</a>"
 
@@ -535,22 +889,49 @@ def api_details():
     return jsonify(data)
 
 
+@app.route("/suivi")
+def suivi():
+    """Page Suivi — matrice entreprise × régie + statuts + montants."""
+    data = get_suivi()
+    return render_template("suivi.html", data=data)
+
+
+@app.route("/api/suivi")
+def api_suivi():
+    """JSON du Suivi — pour une éventuelle app mobile ou tableau Google Sheets."""
+    from flask import jsonify
+    data = get_suivi()
+    # Allège le payload : on retire les sous-listes « declarations » déjà
+    # redondantes avec le top-level.
+    payload = {
+        "scraped_at": data.get("scraped_at"),
+        "kpi": data.get("kpi"),
+        "entreprises": [
+            {k: v for k, v in e.items() if k != "declarations"}
+            for e in data.get("entreprises", [])
+        ],
+        "regies": [
+            {k: v for k, v in r.items() if k != "entreprises"}
+            for r in data.get("regies", [])
+        ],
+        "declarations": data.get("declarations"),
+    }
+    return jsonify(payload)
+
+
 @app.route("/diag")
 def diag():
     """
     Diagnostic réseau — teste la joignabilité du serveur T/SL depuis Render.
-    Résultats attendus pour comprendre où ça bloque.
     """
     import socket
     import ssl
-    from urllib.parse import urlparse
 
     out = ["<pre style='font-family: monospace; padding: 20px;'>"]
     out.append("DIAGNOSTIC — depuis les serveurs Render\n")
     out.append(f"Horodatage : {datetime.now().isoformat()}\n")
     out.append("=" * 70 + "\n")
 
-    # Test 1 : résolution DNS
     out.append("\n[1] Résolution DNS de www.tsl-itierdc.org\n")
     try:
         ip = socket.gethostbyname("www.tsl-itierdc.org")
@@ -558,7 +939,6 @@ def diag():
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
 
-    # Test 2 : connexion TCP port 443
     out.append("\n[2] Connexion TCP sur port 443 (handshake HTTPS)\n")
     try:
         t0 = time.time()
@@ -568,7 +948,6 @@ def diag():
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
 
-    # Test 3 : handshake TLS
     out.append("\n[3] Handshake TLS\n")
     try:
         t0 = time.time()
@@ -580,40 +959,30 @@ def diag():
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
 
-    # Test 4 : HEAD sur la racine du site (page légère)
-    out.append("\n[4] HEAD https://www.tsl-itierdc.org/  (page d'accueil, légère)\n")
+    out.append("\n[4] HEAD https://www.tsl-itierdc.org/\n")
     try:
         t0 = time.time()
-        r = requests.head(
-            "https://www.tsl-itierdc.org/",
-            timeout=30,
-            headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
-            allow_redirects=True,
-        )
+        r = requests.head("https://www.tsl-itierdc.org/",
+                          timeout=30,
+                          headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
+                          allow_redirects=True)
         dt = time.time() - t0
         out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s\n")
-        out.append(f"    Headers reçus : Server={r.headers.get('Server', '?')}, "
-                   f"Content-Length={r.headers.get('Content-Length', '?')}\n")
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {str(e)[:200]}\n")
 
-    # Test 5 : GET sur la page du tableau de bord (page lourde)
-    out.append("\n[5] GET https://www.tsl-itierdc.org/tableau_de_bord/index.php  (lourde)\n")
+    out.append("\n[5] GET https://www.tsl-itierdc.org/tableau_de_bord/index.php\n")
     try:
         t0 = time.time()
-        r = requests.get(
-            "https://www.tsl-itierdc.org/tableau_de_bord/index.php",
-            timeout=90,
-            headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*"},
-        )
+        r = requests.get("https://www.tsl-itierdc.org/tableau_de_bord/index.php",
+                         timeout=90,
+                         headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*"})
         dt = time.time() - t0
-        out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s, "
-                   f"{len(r.content)} octets\n")
+        out.append(f"    OK → HTTP {r.status_code} en {dt:.2f} s, {len(r.content)} octets\n")
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {str(e)[:200]}\n")
 
-    # Test 6 : GET sur un site connu (contrôle que le réseau sortant marche)
-    out.append("\n[6] GET https://www.google.com/  (contrôle : réseau sortant Render)\n")
+    out.append("\n[6] GET https://www.google.com/\n")
     try:
         t0 = time.time()
         r = requests.get("https://www.google.com/", timeout=15)
@@ -622,12 +991,6 @@ def diag():
     except Exception as e:
         out.append(f"    ÉCHEC → {type(e).__name__}: {e}\n")
 
-    out.append("\n" + "=" * 70 + "\n")
-    out.append("Interprétation :\n")
-    out.append("- Si [1]-[3] passent mais [4]-[5] timeout → serveur T/SL filtre ou ignore\n")
-    out.append("  les connexions depuis Render (IP, UA, cookies de session).\n")
-    out.append("- Si [1]-[3] échouent → problème réseau fondamental.\n")
-    out.append("- Si [6] passe et [4]-[5] non → confirmation que c'est spécifique T/SL.\n")
     out.append("</pre>")
     return "".join(out)
 
