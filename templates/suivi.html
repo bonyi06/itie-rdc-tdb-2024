@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Suivi des télédéclarations ITIE-RDC 2024 — matrice entreprise × régie, statut validé/non-validé, dates, montants.">
+<meta name="theme-color" content="#0068B4">
+<title>ITIE-RDC — Suivi déclarations 2024</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230068B4'/%3E%3Ctext x='50' y='68' font-family='Arial,sans-serif' font-size='54' font-weight='800' text-anchor='middle' fill='%23FBB800'%3EI%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --itie-blue:#0068B4; --itie-blue-dark:#004F89; --itie-blue-light:#1A82D5; --itie-blue-top:#1898DD;
+  --itie-yellow:#FBB800; --itie-yellow-dark:#E6A800; --itie-yellow-text:#B37D00;
+  --fg:#1F2937; --fg-muted:#4B5563; --fg-dim:#6B7280;
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F3F6FA; --surface-3:#E5EDF5;
+  --border:#DBE3EC;
+  --ok:#16A34A; --ok-soft:#DCFCE7;
+  --warn:#D97706; --warn-soft:#FEF3C7;
+  --crit:#DC2626; --crit-soft:#FEE2E2;
+  --shadow-sm:0 1px 2px rgba(31,41,55,0.04);
+  --shadow-md:0 4px 12px rgba(31,41,55,0.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#FFF;color:var(--fg);font-family:'Open Sans',system-ui,sans-serif;font-size:14px;line-height:1.55}
+h1,h2,h3,h4{font-family:'Montserrat',sans-serif;margin:0;letter-spacing:-0.01em}
+.num{font-variant-numeric:tabular-nums}
+
+.topbar{background:var(--itie-blue-top);color:#FFF;font-size:0.82rem;padding:7px max(16px,env(safe-area-inset-left,0px))}
+.topbar-inner{max-width:1600px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;align-items:center}
+
+.navbar{background:#FFF;padding:14px max(16px,env(safe-area-inset-left,0px));border-bottom:3px solid var(--surface-2);position:sticky;top:0;z-index:50}
+.navbar-inner{max-width:1600px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.logo{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.4rem;color:var(--itie-blue);text-decoration:none}
+.logo .lrdc{color:var(--itie-blue-light)}
+.nav-menu{display:flex;gap:6px;font-family:'Montserrat',sans-serif;font-size:0.9rem;font-weight:600;flex-wrap:wrap}
+.nav-menu a{color:var(--fg);text-decoration:none;padding:8px 12px;border-radius:4px;white-space:nowrap}
+.nav-menu a:hover{color:var(--itie-blue);background:var(--surface-2)}
+.nav-menu a.active{color:var(--itie-blue);border-bottom:2px solid var(--itie-yellow);border-radius:0}
+@media(max-width:980px){.nav-menu{font-size:0.82rem}}
+
+.hero{background:linear-gradient(135deg,rgba(0,104,180,0.95),rgba(0,79,137,0.95)),var(--itie-blue);color:#FFF;padding:36px max(16px,env(safe-area-inset-left,0px)) 44px}
+.hero-inner{max-width:1600px;margin:0 auto}
+.hero .eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(251,184,0,0.15);border:1px solid rgba(251,184,0,0.45);color:var(--itie-yellow);font-weight:700;font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;padding:5px 12px;border-radius:999px;margin-bottom:14px}
+.hero h1{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:800;line-height:1.1;margin-bottom:10px}
+.hero h1 .accent{color:var(--itie-yellow)}
+.hero p.lead{font-size:1rem;color:rgba(255,255,255,0.9);max-width:70ch}
+
+.kpi-band{background:var(--surface-2);padding:28px max(16px,env(safe-area-inset-left,0px))}
+.kpi-band-inner{max-width:1600px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.kpi-card{background:#FFF;border-radius:10px;padding:18px 16px;text-align:center;box-shadow:var(--shadow-sm);border:1px solid var(--border)}
+.k-value{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.8rem;color:var(--itie-blue);line-height:1.1;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.k-value .unit{font-size:0.75rem;color:var(--fg-dim);font-weight:600;margin-left:4px}
+.k-label{color:var(--fg-muted);font-size:0.85rem;font-weight:500}
+.k-foot{color:var(--fg-dim);font-size:0.72rem;margin-top:4px}
+.kpi-card.highlight .k-value{color:var(--itie-yellow-text)}
+.kpi-card.ok .k-value{color:var(--ok)}
+.kpi-card.warn .k-value{color:var(--warn)}
+.kpi-card.crit .k-value{color:var(--crit)}
+
+section.block{max-width:1600px;margin:0 auto;padding:30px max(16px,env(safe-area-inset-left,0px))}
+.block-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:2px solid var(--surface-3);padding-bottom:10px}
+.block-head h2{font-size:1.3rem;font-weight:700;color:var(--itie-blue-dark)}
+.block-head h2::before{content:"";display:inline-block;width:5px;height:19px;background:var(--itie-yellow);margin-right:10px;vertical-align:-3px;border-radius:1px}
+.block-head .sub{color:var(--fg-dim);font-size:0.85rem}
+.block-head .actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:4px;font:600 0.82rem 'Montserrat',sans-serif;cursor:pointer;border:1px solid var(--border);background:#FFF;color:var(--fg);text-decoration:none}
+.btn:hover{background:var(--surface-2);border-color:var(--itie-blue-light)}
+.btn.primary{background:var(--itie-yellow);border-color:var(--itie-yellow-dark);color:#1F2937}
+.btn.primary:hover{background:var(--itie-yellow-dark)}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--surface-2);padding:12px 14px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--fg-muted);font-weight:600}
+.filters input,.filters select{padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:#FFF;font-family:inherit;font-size:0.85rem}
+.filters input[type="search"]{min-width:220px}
+
+/* Tables */
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px;background:#FFF}
+table.data{width:100%;border-collapse:collapse;font-size:0.86rem}
+table.data th,table.data td{padding:7px 10px;border-bottom:1px solid var(--surface-2);text-align:left;white-space:nowrap}
+table.data th{background:var(--surface-2);color:var(--fg-muted);font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.03em;position:sticky;top:0;cursor:pointer;user-select:none}
+table.data th:hover{background:var(--surface-3)}
+table.data th.sort-asc::after{content:" ▲";color:var(--itie-blue);font-size:0.7rem}
+table.data th.sort-desc::after{content:" ▼";color:var(--itie-blue);font-size:0.7rem}
+table.data td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.data tbody tr:hover{background:var(--surface-2)}
+table.data tr.clickable{cursor:pointer}
+table.data tr.clickable:hover{background:var(--surface-3)}
+
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:0.72rem;font-weight:700;line-height:1.4}
+.badge.ok{background:var(--ok-soft);color:#15803D}
+.badge.warn{background:var(--warn-soft);color:#92400E}
+.badge.crit{background:var(--crit-soft);color:#991B1B}
+.badge.neutral{background:var(--surface-3);color:var(--fg-muted)}
+
+/* Pastilles de validation */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-size:0.74rem;font-weight:600;line-height:1.3;white-space:nowrap}
+.chip.v{background:#DCFCE7;color:#15803D}
+.chip.nv{background:#FEE2E2;color:#991B1B}
+.chip .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.chip.v .dot{background:#16A34A}
+.chip.nv .dot{background:#DC2626}
+
+/* Matrice */
+.matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:6px;max-height:70vh;background:#FFF;position:relative}
+table.matrix{border-collapse:collapse;font-size:0.72rem;font-family:'Open Sans',sans-serif}
+table.matrix th,table.matrix td{border:1px solid #E5EDF5;padding:0;text-align:center}
+table.matrix thead th{background:var(--itie-blue);color:#FFF;font-weight:600;font-size:0.7rem;padding:6px 4px;position:sticky;top:0;z-index:2;line-height:1.1;max-width:70px;height:120px;vertical-align:bottom}
+table.matrix thead th .label{display:inline-block;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;max-height:110px;overflow:hidden;text-overflow:ellipsis;padding:4px 0}
+table.matrix thead th.fixed{writing-mode:horizontal-tb;background:var(--itie-blue-dark);min-width:200px;position:sticky;left:0;z-index:3;text-align:left;padding:6px 10px;vertical-align:middle;height:auto}
+table.matrix tbody th{background:var(--surface-2);color:var(--fg);font-weight:600;font-size:0.76rem;text-align:left;padding:5px 10px;position:sticky;left:0;z-index:1;min-width:200px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:2px solid var(--border)}
+table.matrix tbody th:hover{background:var(--surface-3);cursor:help}
+table.matrix td{width:30px;height:22px;font-size:0.68rem;font-weight:600;line-height:1}
+table.matrix td.valid{background:#86EFAC;color:#14532D}
+table.matrix td.invalid{background:#FCA5A5;color:#7F1D1D}
+table.matrix td.empty{background:#FFF}
+table.matrix td.highlight{outline:2px solid var(--itie-yellow);outline-offset:-2px;z-index:1;position:relative}
+
+/* Détail panel */
+.detail-panel{position:fixed;top:0;right:0;width:min(560px,95vw);height:100vh;background:#FFF;box-shadow:-6px 0 30px rgba(0,0,0,0.15);z-index:100;display:none;flex-direction:column;overflow:hidden}
+.detail-panel.open{display:flex}
+.detail-head{background:var(--itie-blue);color:#FFF;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.detail-head h3{font-size:1.1rem;font-weight:700;line-height:1.3}
+.detail-head .close{background:transparent;border:0;color:#FFF;font-size:1.4rem;cursor:pointer;padding:4px 10px;border-radius:4px}
+.detail-head .close:hover{background:rgba(255,255,255,0.15)}
+.detail-body{overflow-y:auto;padding:16px 20px;flex:1}
+.detail-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.detail-stat{background:var(--surface-2);padding:10px;border-radius:6px;text-align:center}
+.detail-stat .v{font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.1rem;color:var(--itie-blue);display:block}
+.detail-stat .l{color:var(--fg-muted);font-size:0.72rem;margin-top:2px}
+.detail-overlay{position:fixed;inset:0;background:rgba(31,41,55,0.4);z-index:99;display:none}
+.detail-overlay.open{display:block}
+
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:0.78rem;color:var(--fg-muted);margin-top:10px}
+.legend-item{display:inline-flex;align-items:center;gap:6px}
+.legend-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--border)}
+.legend-swatch.valid{background:#86EFAC}
+.legend-swatch.invalid{background:#FCA5A5}
+.legend-swatch.empty{background:#FFF}
+
+.footer{background:var(--itie-blue-dark);color:rgba(255,255,255,0.85);padding:30px max(16px,env(safe-area-inset-left,0px));margin-top:40px;font-size:0.85rem}
+.footer-inner{max-width:1600px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--surface-3);margin-bottom:16px;flex-wrap:wrap}
+.tabs button{background:transparent;border:0;padding:9px 16px;font:600 0.88rem 'Montserrat',sans-serif;color:var(--fg-muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button:hover{color:var(--itie-blue)}
+.tabs button.active{color:var(--itie-blue);border-bottom-color:var(--itie-yellow)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+@media(max-width:980px){
+  .detail-panel{width:100vw}
+  .detail-stats{grid-template-columns:1fr 1fr}
+  table.matrix thead th{height:90px;max-width:50px}
+  table.matrix tbody th{min-width:140px;max-width:140px;font-size:0.7rem}
+}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <span>INITIATIVE POUR LA TRANSPARENCE DES INDUSTRIES EXTRACTIVES EN RDC</span>
+    <span>Rapprochement 2024 — données live</span>
+  </div>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="logo">ITIE<span class="lrdc">-RDC</span></a>
+    <div class="nav-menu">
+      <a href="https://www.itierdc.net" target="_blank" rel="noopener">Site ITIE-RDC</a>
+      <a href="/">Vue d'ensemble</a>
+      <a href="/suivi" class="active">Suivi par entreprise & régie</a>
+      <a href="/details">Flux détaillés</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <span class="eyebrow">Suivi 2024 — Télédéclarations</span>
+    <h1>Situation détaillée <span class="accent">entreprise par entreprise</span>, régie par régie</h1>
+    <p class="lead">Dates de chargement, statut validé/non-validé par la régie destinataire, montants déclarés par les sociétés et confirmés par l'État, croisement entreprise × régie. Toutes les données sont lues en direct de la plateforme T/SL de l'ITIE-RDC.</p>
+  </div>
+</section>
+
+<!-- KPIs -->
+<section class="kpi-band">
+  <div class="kpi-band-inner">
+    <div class="kpi-card">
+      <div class="k-value num">{{ data.kpi.nb_declarations }}</div>
+      <div class="k-label">Déclarations chargées</div>
+      <div class="k-foot">(entreprise × régie)</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="k-value num">{{ data.kpi.nb_valid }}</div>
+      <div class="k-label">Validées</div>
+      <div class="k-foot">{{ "%.0f"|format(data.kpi.pct_valid) }} % du total</div>
+    </div>
+    <div class="kpi-card crit">
+      <div class="k-value num">{{ data.kpi.nb_invalid }}</div>
+      <div class="k-label">Non validées</div>
+      <div class="k-foot">en attente de la régie</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-value num">{{ data.kpi.nb_ent_actifs }}<span class="unit">/ {{ data.kpi.nb_ent_total }}</span></div>
+      <div class="k-label">Entreprises actives</div>
+      <div class="k-foot">ayant chargé au moins 1 déclaration</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-value num">{{ data.kpi.nb_regies_actives }}<span class="unit">/ {{ data.kpi.nb_regies_total }}</span></div>
+      <div class="k-label">Régies destinataires</div>
+      <div class="k-foot">ayant reçu au moins 1 déclaration</div>
+    </div>
+    <div class="kpi-card highlight">
+      <div class="k-value num">{{ "{:,.0f}".format(data.kpi.sum_soc_fin|default(0)/1_000_000).replace(",", " ") }}<span class="unit">M USD</span></div>
+      <div class="k-label">Déclaré par les sociétés</div>
+      <div class="k-foot">après ajustements</div>
+    </div>
+    <div class="kpi-card highlight">
+      <div class="k-value num">{{ "{:,.0f}".format(data.kpi.sum_etat_fin|default(0)/1_000_000).replace(",", " ") }}<span class="unit">M USD</span></div>
+      <div class="k-label">Confirmé par l'État</div>
+      <div class="k-foot">après ajustements</div>
+    </div>
+    <div class="kpi-card {% if data.kpi.sum_diff_fin|default(0) > 0 %}warn{% else %}ok{% endif %}">
+      <div class="k-value num">{{ "{:+,.0f}".format(data.kpi.sum_diff_fin|default(0)/1_000_000).replace(",", " ") }}<span class="unit">M USD</span></div>
+      <div class="k-label">Écart final</div>
+      <div class="k-foot">sociétés − État</div>
+    </div>
+  </div>
+</section>
+
+<!-- Onglets -->
+<section class="block">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ent">Statut par entreprise</button>
+    <button class="tab-btn" data-tab="reg">Statut par régie</button>
+    <button class="tab-btn" data-tab="matrix">Matrice de rapprochement</button>
+    <button class="tab-btn" data-tab="flux">Flux détaillés</button>
+  </div>
+
+  <!-- Tab 1 : Statut par entreprise -->
+  <div class="tab-content active" id="tab-ent">
+    <div class="block-head">
+      <div>
+        <h2>Statut par entreprise</h2>
+        <div class="sub">Pour chaque entreprise déclarante : combien de régies touchées, combien validées, combien en attente, dernière date de chargement, montants déclarés et confirmés.</div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" onclick="exportCSV('tbl-ent','suivi-entreprises-2024.csv')">⬇︎ Exporter CSV</button>
+      </div>
+    </div>
+    <div class="filters">
+      <label>🔎 <input type="search" id="search-ent" placeholder="Rechercher entreprise, NIF, secteur…"></label>
+      <label>Statut
+        <select id="filter-ent-status">
+          <option value="">Tous</option>
+          <option value="ok">Toutes validées</option>
+          <option value="warn">Partiellement validé</option>
+          <option value="crit">Aucune déclaration</option>
+        </select>
+      </label>
+      <label>Secteur
+        <select id="filter-ent-secteur">
+          <option value="">Tous</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-wrap">
+      <table class="data" id="tbl-ent">
+        <thead>
+          <tr>
+            <th data-sort="num">No</th>
+            <th>NIF</th>
+            <th>Entreprise</th>
+            <th>Secteur</th>
+            <th data-sort="num"># Régies</th>
+            <th data-sort="num">Validées</th>
+            <th data-sort="num">En attente</th>
+            <th>Dernière date</th>
+            <th data-sort="num">Sociétés déclaré (USD)</th>
+            <th data-sort="num">État confirmé (USD)</th>
+            <th data-sort="num">Écart final (USD)</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for e in data.entreprises %}
+          <tr class="clickable" data-ent="{{ loop.index0 }}" data-status="{{ e.status }}" data-secteur="{{ e.secteur|e }}">
+            <td class="num">{{ e.no }}</td>
+            <td>{{ e.nif }}</td>
+            <td><strong>{{ e.name }}</strong></td>
+            <td>{{ e.secteur }}</td>
+            <td class="num">{{ e.nb_regies }}</td>
+            <td class="num">{{ e.nb_valid }}</td>
+            <td class="num">{{ e.nb_invalid }}</td>
+            <td>{{ e.last_date }}</td>
+            <td class="num">{{ "{:,.0f}".format(e.soc_fin|default(0)).replace(",", " ") }}</td>
+            <td class="num">{{ "{:,.0f}".format(e.etat_fin|default(0)).replace(",", " ") }}</td>
+            <td class="num">{{ "{:+,.0f}".format(e.diff_fin|default(0)).replace(",", " ") }}</td>
+            <td>
+              {% if e.status == "ok" %}<span class="badge ok">Validé</span>
+              {% elif e.status == "warn" %}<span class="badge warn">Partiel</span>
+              {% else %}<span class="badge crit">Aucune</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab 2 : Statut par régie -->
+  <div class="tab-content" id="tab-reg">
+    <div class="block-head">
+      <div>
+        <h2>Statut par régie destinataire</h2>
+        <div class="sub">Pour chaque régie financière : combien d'entreprises ont déclaré, combien de déclarations ont été validées / sont en attente, montants perçus déclarés et confirmés.</div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" onclick="exportCSV('tbl-reg','suivi-regies-2024.csv')">⬇︎ Exporter CSV</button>
+      </div>
+    </div>
+    <div class="filters">
+      <label>🔎 <input type="search" id="search-reg" placeholder="Rechercher régie…"></label>
+      <label>Activité
+        <select id="filter-reg-act">
+          <option value="">Toutes</option>
+          <option value="active">Avec déclarations</option>
+          <option value="inactive">Sans déclaration</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-wrap">
+      <table class="data" id="tbl-reg">
+        <thead>
+          <tr>
+            <th>Régie</th>
+            <th data-sort="num"># Entreprises</th>
+            <th data-sort="num">Validées</th>
+            <th data-sort="num">Non validées</th>
+            <th>Dernière date</th>
+            <th data-sort="num">Sociétés déclaré (USD)</th>
+            <th data-sort="num">État confirmé (USD)</th>
+            <th data-sort="num">Écart final (USD)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in data.regies %}
+          <tr class="clickable" data-reg="{{ loop.index0 }}">
+            <td><strong>{{ r.name }}</strong></td>
+            <td class="num">{{ r.nb_ent }}</td>
+            <td class="num">{{ r.nb_valid }}</td>
+            <td class="num">{{ r.nb_invalid }}</td>
+            <td>{{ r.last_date }}</td>
+            <td class="num">{{ "{:,.0f}".format(r.soc_fin|default(0)).replace(",", " ") }}</td>
+            <td class="num">{{ "{:,.0f}".format(r.etat_fin|default(0)).replace(",", " ") }}</td>
+            <td class="num">{{ "{:+,.0f}".format(r.diff_fin|default(0)).replace(",", " ") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab 3 : Matrice -->
+  <div class="tab-content" id="tab-matrix">
+    <div class="block-head">
+      <div>
+        <h2>Matrice de rapprochement entreprise × régie</h2>
+        <div class="sub">Chaque cellule = date de chargement. Vert = validé par la régie, rouge = en attente de validation. Cliquez sur une entreprise (ligne) pour isoler sa ligne.</div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" onclick="exportMatrixCSV()">⬇︎ Exporter CSV</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-swatch valid"></span>Validé</span>
+      <span class="legend-item"><span class="legend-swatch invalid"></span>Non validé</span>
+      <span class="legend-item"><span class="legend-swatch empty"></span>Non déclaré</span>
+      <span class="legend-item" style="margin-left:auto">{{ data.entreprises|length }} entreprises × {{ data.regies_names|length }} régies — {{ data.kpi.nb_declarations }} déclarations</span>
+    </div>
+    <div class="filters">
+      <label>🔎 <input type="search" id="search-matrix" placeholder="Filtrer entreprise…"></label>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix" id="matrix">
+        <thead>
+          <tr>
+            <th class="fixed">Entreprise ▽ · Régie ▷</th>
+            {% for r in data.regies_names %}
+            <th title="{{ r }}"><span class="label">{{ r }}</span></th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+        {% for e in data.entreprises %}
+          <tr data-ent="{{ loop.index0 }}">
+            <th title="{{ e.name }} — NIF {{ e.nif }}">{{ e.name }}</th>
+            {# Construire un dict régie→déclaration pour cette entreprise #}
+            {% set decls = {} %}
+            {% for d in e.declarations %}{% set _ = decls.update({d.regie: d}) %}{% endfor %}
+            {% for r in data.regies_names %}
+              {% set d = decls.get(r) %}
+              {% if d %}
+                {% if d.validated %}
+                <td class="valid" title="{{ e.name }} → {{ r }} : {{ d.date }} (validé)">{{ d.date }}</td>
+                {% else %}
+                <td class="invalid" title="{{ e.name }} → {{ r }} : {{ d.date }} (non validé)">{{ d.date }}</td>
+                {% endif %}
+              {% else %}
+                <td class="empty"></td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab 4 : Flux détaillés -->
+  <div class="tab-content" id="tab-flux">
+    <div class="block-head">
+      <div>
+        <h2>Flux de paiements 2024</h2>
+        <div class="sub">Montants déclarés et confirmés pour chaque flux (impôts, taxes, redevances…) de chaque régie. {{ data.flux|length }} lignes.</div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/details?year=2024&report=decla-flux-global">Vue filtrable complète →</a>
+        <button class="btn primary" onclick="exportCSV('tbl-flux','suivi-flux-2024.csv')">⬇︎ Exporter CSV</button>
+      </div>
+    </div>
+    <div class="filters">
+      <label>🔎 <input type="search" id="search-flux" placeholder="Rechercher régie ou flux…"></label>
+    </div>
+    <div class="table-wrap">
+      <table class="data" id="tbl-flux">
+        <thead>
+          <tr>
+            <th data-sort="num">No</th>
+            <th>Régie</th>
+            <th>Flux</th>
+            <th data-sort="num">Sociétés déclaré (USD)</th>
+            <th data-sort="num">État déclaré (USD)</th>
+            <th data-sort="num">Sociétés final (USD)</th>
+            <th data-sort="num">État final (USD)</th>
+            <th data-sort="num">Écart final (USD)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for f in data.flux %}
+          <tr>
+            <td class="num">{{ f.no }}</td>
+            <td>{{ f.regie }}</td>
+            <td>{{ f.flux }}</td>
+            <td class="num">{{ "{:,.0f}".format(f.soc_decl).replace(",", " ") }}</td>
+            <td class="num">{{ "{:,.0f}".format(f.etat_decl).replace(",", " ") }}</td>
+            <td class="num">{{ "{:,.0f}".format(f.soc_fin).replace(",", " ") }}</td>
+            <td class="num">{{ "{:,.0f}".format(f.etat_fin).replace(",", " ") }}</td>
+            <td class="num">{{ "{:+,.0f}".format(f.diff_fin).replace(",", " ") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Panel latéral pour détail entreprise/régie -->
+<div class="detail-overlay" id="overlay" onclick="closeDetail()"></div>
+<aside class="detail-panel" id="panel">
+  <div class="detail-head">
+    <h3 id="panel-title">—</h3>
+    <button class="close" onclick="closeDetail()" aria-label="Fermer">×</button>
+  </div>
+  <div class="detail-body" id="panel-body"></div>
+</aside>
+
+<!-- Footer -->
+<div class="footer">
+  <div class="footer-inner">
+    <span>ITIE-RDC · Secrétariat technique · {{ data.scraped_at }}</span>
+    <span>Taux : 2 793,46 CDF/USD · <a href="/suivi" style="color:var(--itie-yellow)">Actualiser</a></span>
+  </div>
+</div>
+
+<script>
+// ---- Données JSON embarquées pour le panel ----
+const entData = {{ data.entreprises | tojson | safe }};
+const regData = {{ data.regies     | tojson | safe }};
+const regieNames = {{ data.regies_names | tojson | safe }};
+
+// ---- Onglets ----
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+}));
+
+// ---- Remplit le select des secteurs ----
+(function(){
+  const sel = document.getElementById('filter-ent-secteur');
+  const secs = Array.from(new Set(entData.map(e => e.secteur).filter(s => s && s !== '—'))).sort();
+  secs.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+})();
+
+// ---- Filtres tables ----
+function filterTable(tableId, searchId, extra) {
+  const search = document.getElementById(searchId).value.toLowerCase();
+  const rows = document.querySelectorAll('#' + tableId + ' tbody tr');
+  rows.forEach(r => {
+    const text = r.textContent.toLowerCase();
+    let ok = !search || text.includes(search);
+    if (ok && extra) ok = extra(r);
+    r.style.display = ok ? '' : 'none';
+  });
+}
+document.getElementById('search-ent').addEventListener('input',   () => filterEnt());
+document.getElementById('filter-ent-status').addEventListener('change',   () => filterEnt());
+document.getElementById('filter-ent-secteur').addEventListener('change',  () => filterEnt());
+function filterEnt(){
+  const stat = document.getElementById('filter-ent-status').value;
+  const sect = document.getElementById('filter-ent-secteur').value;
+  filterTable('tbl-ent', 'search-ent', r => {
+    if (stat && r.dataset.status !== stat) return false;
+    if (sect && r.dataset.secteur !== sect) return false;
+    return true;
+  });
+}
+document.getElementById('search-reg').addEventListener('input',  () => filterReg());
+document.getElementById('filter-reg-act').addEventListener('change', () => filterReg());
+function filterReg(){
+  const act = document.getElementById('filter-reg-act').value;
+  filterTable('tbl-reg', 'search-reg', r => {
+    const nb = parseInt(r.cells[1].textContent) || 0;
+    if (act === 'active'   && nb === 0) return false;
+    if (act === 'inactive' && nb >  0) return false;
+    return true;
+  });
+}
+document.getElementById('search-flux').addEventListener('input', () => filterTable('tbl-flux', 'search-flux'));
+
+// ---- Filtre matrice (par nom d'entreprise) ----
+document.getElementById('search-matrix').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#matrix tbody tr').forEach(r => {
+    r.style.display = (!q || r.querySelector('th').textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
+});
+
+// ---- Tri colonnes ----
+document.querySelectorAll('table.data th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const table = th.closest('table');
+    const colIdx = Array.from(th.parentNode.children).indexOf(th);
+    const type = th.dataset.sort;
+    const asc = !th.classList.contains('sort-asc');
+    table.querySelectorAll('th').forEach(x => x.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    rows.sort((a, b) => {
+      let va = a.cells[colIdx].textContent.trim();
+      let vb = b.cells[colIdx].textContent.trim();
+      if (type === 'num') {
+        va = parseFloat(va.replace(/[^\d.\-]/g, '')) || 0;
+        vb = parseFloat(vb.replace(/[^\d.\-]/g, '')) || 0;
+      }
+      if (va < vb) return asc ? -1 : 1;
+      if (va > vb) return asc ? 1 : -1;
+      return 0;
+    });
+    const tbody = table.querySelector('tbody');
+    rows.forEach(r => tbody.appendChild(r));
+  });
+});
+
+// ---- Export CSV ----
+function exportCSV(tableId, filename) {
+  const rows = [];
+  document.querySelectorAll('#' + tableId + ' tr').forEach(tr => {
+    if (tr.style.display === 'none') return;
+    const r = [];
+    tr.querySelectorAll('th,td').forEach(c => r.push('"' + c.textContent.trim().replace(/"/g, '""') + '"'));
+    rows.push(r.join(';'));
+  });
+  const blob = new Blob(['﻿' + rows.join('\n')], {type: 'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function exportMatrixCSV() {
+  const rows = [];
+  const header = ['Entreprise'].concat(regieNames);
+  rows.push(header.map(h => '"' + h.replace(/"/g, '""') + '"').join(';'));
+  entData.forEach(e => {
+    if (e.nb_regies === 0) return;
+    const decls = {};
+    (e.declarations || []).forEach(d => { decls[d.regie] = d; });
+    const row = ['"' + e.name.replace(/"/g, '""') + '"'];
+    regieNames.forEach(rn => {
+      const d = decls[rn];
+      row.push('"' + (d ? (d.date + (d.validated ? ' (V)' : ' (NV)')) : '') + '"');
+    });
+    rows.push(row.join(';'));
+  });
+  const blob = new Blob(['﻿' + rows.join('\n')], {type: 'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'matrice-entreprise-regie-2024.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ---- Détail entreprise ----
+function fmtMoney(x){ return (x||0).toLocaleString('fr-FR', {maximumFractionDigits:0}) + ' USD'; }
+
+document.querySelectorAll('#tbl-ent tbody tr').forEach(tr => {
+  tr.addEventListener('click', () => showEnt(parseInt(tr.dataset.ent)));
+});
+document.querySelectorAll('#tbl-reg tbody tr').forEach(tr => {
+  tr.addEventListener('click', () => showReg(parseInt(tr.dataset.reg)));
+});
+
+function showEnt(idx) {
+  const e = entData[idx]; if (!e) return;
+  document.getElementById('panel-title').textContent = e.name;
+  const decls = (e.declarations || []).slice().sort((a,b) => a.regie.localeCompare(b.regie));
+  const rows = decls.map(d => {
+    const chip = d.validated ? '<span class="chip v"><span class="dot"></span>Validé</span>'
+                             : '<span class="chip nv"><span class="dot"></span>Non validé</span>';
+    return `<tr><td><strong>${d.regie}</strong></td><td>${d.date}</td><td>${chip}</td></tr>`;
+  }).join('');
+  document.getElementById('panel-body').innerHTML = `
+    <div style="margin-bottom:14px;color:var(--fg-muted);font-size:0.85rem">
+      NIF : <strong>${e.nif}</strong> · Secteur : ${e.secteur || '—'} · Type : ${e.type || '—'}
+    </div>
+    <div class="detail-stats">
+      <div class="detail-stat"><span class="v">${e.nb_regies}</span><span class="l">Régies touchées</span></div>
+      <div class="detail-stat"><span class="v" style="color:#15803D">${e.nb_valid}</span><span class="l">Validées</span></div>
+      <div class="detail-stat"><span class="v" style="color:#991B1B">${e.nb_invalid}</span><span class="l">Non validées</span></div>
+    </div>
+    <div style="background:var(--surface-2);padding:12px;border-radius:6px;margin-bottom:14px">
+      <div style="font-size:0.82rem;color:var(--fg-muted);margin-bottom:6px"><strong>Montants déclarés</strong> (campagne 2024, après ajustements)</div>
+      <table style="width:100%;font-size:0.85rem">
+        <tr><td>Sociétés déclaré :</td><td style="text-align:right"><strong>${fmtMoney(e.soc_fin)}</strong></td></tr>
+        <tr><td>État confirmé :</td><td style="text-align:right"><strong>${fmtMoney(e.etat_fin)}</strong></td></tr>
+        <tr><td>Écart :</td><td style="text-align:right;color:${e.diff_fin > 0 ? '#D97706' : '#15803D'}"><strong>${(e.diff_fin > 0 ? '+' : '') + fmtMoney(e.diff_fin)}</strong></td></tr>
+      </table>
+    </div>
+    <h4 style="margin-bottom:8px;font-size:0.95rem">Déclarations auprès des régies</h4>
+    ${rows ? `<table class="data" style="width:100%;font-size:0.85rem">
+      <thead><tr><th>Régie</th><th>Date</th><th>Statut</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>` : '<div style="color:var(--fg-muted);font-style:italic">Aucune déclaration enregistrée.</div>'}
+  `;
+  openPanel();
+}
+
+function showReg(idx) {
+  const r = regData[idx]; if (!r) return;
+  document.getElementById('panel-title').textContent = r.name;
+  const ents = (r.entreprises || []).slice().sort((a,b) => a.name.localeCompare(b.name));
+  const rows = ents.map(e => {
+    const chip = e.validated ? '<span class="chip v"><span class="dot"></span>Validé</span>'
+                             : '<span class="chip nv"><span class="dot"></span>Non validé</span>';
+    return `<tr><td><strong>${e.name}</strong></td><td>${e.nif||''}</td><td>${e.date}</td><td>${chip}</td></tr>`;
+  }).join('');
+  document.getElementById('panel-body').innerHTML = `
+    <div class="detail-stats">
+      <div class="detail-stat"><span class="v">${r.nb_ent}</span><span class="l">Entreprises</span></div>
+      <div class="detail-stat"><span class="v" style="color:#15803D">${r.nb_valid}</span><span class="l">Validées</span></div>
+      <div class="detail-stat"><span class="v" style="color:#991B1B">${r.nb_invalid}</span><span class="l">Non validées</span></div>
+    </div>
+    <div style="background:var(--surface-2);padding:12px;border-radius:6px;margin-bottom:14px">
+      <div style="font-size:0.82rem;color:var(--fg-muted);margin-bottom:6px"><strong>Montants perçus</strong> (campagne 2024, après ajustements)</div>
+      <table style="width:100%;font-size:0.85rem">
+        <tr><td>Sociétés déclaré :</td><td style="text-align:right"><strong>${fmtMoney(r.soc_fin)}</strong></td></tr>
+        <tr><td>État confirmé :</td><td style="text-align:right"><strong>${fmtMoney(r.etat_fin)}</strong></td></tr>
+        <tr><td>Écart :</td><td style="text-align:right;color:${r.diff_fin > 0 ? '#D97706' : '#15803D'}"><strong>${(r.diff_fin > 0 ? '+' : '') + fmtMoney(r.diff_fin)}</strong></td></tr>
+      </table>
+    </div>
+    <h4 style="margin-bottom:8px;font-size:0.95rem">Entreprises ayant déclaré</h4>
+    ${rows ? `<table class="data" style="width:100%;font-size:0.82rem">
+      <thead><tr><th>Entreprise</th><th>NIF</th><th>Date</th><th>Statut</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>` : '<div style="color:var(--fg-muted);font-style:italic">Aucune déclaration adressée à cette régie.</div>'}
+  `;
+  openPanel();
+}
+
+function openPanel() {
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('panel').classList.add('open');
+}
+function closeDetail() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('panel').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+</script>
+</body>
+</html>
