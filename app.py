@@ -919,6 +919,89 @@ def api_suivi():
     return jsonify(payload)
 
 
+@app.route("/diag-matrix")
+def diag_matrix():
+    """Diagnostic — ce que le parser voit depuis Render sur tableau_de_bord_2024.php."""
+    out = ["<pre style='font-family:monospace;padding:20px;font-size:12px'>"]
+    out.append("DIAGNOSTIC MATRICE 2024 — depuis Render\n")
+    out.append("=" * 70 + "\n\n")
+    try:
+        t0 = time.time()
+        html = fetch(SRC_2024)
+        out.append(f"[1] GET {SRC_2024}\n")
+        out.append(f"    HTTP OK, {len(html)} octets, {time.time()-t0:.1f} s\n\n")
+
+        soup = BeautifulSoup(html, "lxml")
+        tables = soup.find_all("table")
+        out.append(f"[2] Nombre de tables trouvées : {len(tables)}\n\n")
+
+        for idx, table in enumerate(tables[:3]):
+            rows = table.find_all("tr")
+            tbody = table.find("tbody")
+            thead = table.find("thead")
+            out.append(f"[3.{idx}] Table n°{idx} : {len(rows)} lignes, "
+                       f"thead={'oui' if thead else 'non'}, tbody={'oui' if tbody else 'non'}\n")
+            # Première ligne
+            if rows:
+                r0 = rows[0]
+                cells_td = r0.find_all("td")
+                cells_th = r0.find_all("th")
+                cells_any = r0.find_all(["th", "td"])
+                out.append(f"    Row 0 : {len(cells_td)} td, {len(cells_th)} th, "
+                           f"{len(cells_any)} au total — classe='{r0.get('class', [])}'\n")
+                if cells_any:
+                    sample = [c.get_text(strip=True)[:20] for c in cells_any[:6]]
+                    out.append(f"    Row 0 contenu (6 premières cellules) : {sample}\n")
+            # Deuxième ligne
+            if len(rows) > 1:
+                r1 = rows[1]
+                cells_td = r1.find_all("td")
+                cells_th = r1.find_all("th")
+                cells_any = r1.find_all(["th", "td"])
+                out.append(f"    Row 1 : {len(cells_td)} td, {len(cells_th)} th, "
+                           f"{len(cells_any)} au total — classe='{r1.get('class', [])}'\n")
+                if cells_any:
+                    sample = [c.get_text(strip=True)[:20] for c in cells_any[:6]]
+                    out.append(f"    Row 1 contenu (6 premières cellules) : {sample}\n")
+            # Troisième ligne
+            if len(rows) > 2:
+                r2 = rows[2]
+                cells_any = r2.find_all(["th", "td"])
+                if cells_any:
+                    sample = [c.get_text(strip=True)[:20] for c in cells_any[:6]]
+                    out.append(f"    Row 2 (6 premières cellules) : {sample}\n")
+            out.append("\n")
+
+        # Essai du parser actuel
+        out.append("[4] Résultat du parser actuel (scrape_2024_matrix) :\n")
+        mat = scrape_2024_matrix()
+        out.append(f"    regies      : {len(mat['regies'])} items\n")
+        out.append(f"    entreprises : {len(mat['entreprises'])} items\n")
+        out.append(f"    declarations: {len(mat['declarations'])} items\n")
+        out.append(f"    nb_valid    : {mat['nb_valid']}\n")
+        out.append(f"    nb_invalid  : {mat['nb_invalid']}\n")
+
+        # Snippet de l'HTML brut autour de la ligne 1 (si existe)
+        out.append("\n[5] Extrait HTML brut (après la 1ère balise <tr>, 500 car.) :\n")
+        import re as _re
+        m = _re.search(r"<tr[^>]*>", html)
+        if m:
+            start = m.end()
+            end = html.find("</tr>", start)
+            snippet = html[start:min(end, start+500)] if end > 0 else html[start:start+500]
+            # échappe les < > pour affichage
+            snippet = snippet.replace("<", "[").replace(">", "]")
+            out.append(f"    {snippet}\n")
+
+    except Exception as e:
+        import traceback
+        out.append(f"\nERREUR : {type(e).__name__}: {e}\n")
+        out.append(traceback.format_exc())
+
+    out.append("</pre>")
+    return "".join(out)
+
+
 @app.route("/diag")
 def diag():
     """
