@@ -281,13 +281,22 @@ tbody tr:hover td{background:var(--surface-2)}
 
 <section class="main-sec">
   <div class="sec-inner">
-    <div class="sec-head"><h2>Top 15 régies perceptrices</h2><span class="sec-note">Classement par équivalent USD décroissant</span></div>
+    <div class="sec-head">
+      <h2>Toutes les régies perceptrices</h2>
+      <span class="sec-note">{{ data.regies_all|length }} structures, classées par équivalent USD décroissant</span>
+    </div>
+    <div class="controls">
+      <input type="search" id="searchRegies" placeholder="Rechercher une régie…" />
+      <label style="margin-left:auto;font-size:0.82rem;color:var(--fg-muted);display:inline-flex;align-items:center;gap:6px">
+        <input type="checkbox" id="onlyDeclaring" checked> Uniquement celles ayant déclaré
+      </label>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th style="width:40px">N°</th><th>Structure</th><th class="right">Lignes</th><th class="right">Total USD</th><th class="right">Total CDF</th><th class="right">Équivalent USD</th></tr></thead>
-        <tbody>
-        {% for r in data.regies_top %}
-          <tr>
+        <tbody id="regiesBody">
+        {% for r in data.regies_all %}
+          <tr data-name="{{ r.structure|lower }}" data-lignes="{{ r.lignes }}" data-usd-eq="{{ r.usd_eq }}">
             <td style="color:var(--fg-dim)" class="num">{{ "%02d" % (loop.index) }}</td>
             <td class="name">{{ r.structure }}</td>
             <td class="right num">{{ "{:,.0f}".format(r.lignes).replace(",", " ") }}</td>
@@ -394,6 +403,35 @@ document.getElementById('searchBox').addEventListener('input', e => {
     tr.classList.toggle('hidden-row', q && !tr.dataset.name.includes(q));
   });
 });
+
+// Filtre & renumérotation du tableau "Toutes les régies perceptrices"
+(function(){
+  const inp  = document.getElementById('searchRegies');
+  const only = document.getElementById('onlyDeclaring');
+  const body = document.getElementById('regiesBody');
+  if (!inp || !body) return;
+  const rows = Array.from(body.querySelectorAll('tr'));
+  function refresh(){
+    const q = inp.value.toLowerCase().trim();
+    const declOnly = only.checked;
+    let visible = 0;
+    rows.forEach(tr => {
+      const nameOK = !q || tr.dataset.name.includes(q);
+      const lignes = parseFloat(tr.dataset.lignes) || 0;
+      const usdEq  = parseFloat(tr.dataset.usdEq)  || 0;
+      const declOK = !declOnly || lignes > 0 || usdEq > 0;
+      const shown  = nameOK && declOK;
+      tr.classList.toggle('hidden-row', !shown);
+      if (shown) {
+        visible++;
+        tr.cells[0].textContent = String(visible).padStart(2, '0');
+      }
+    });
+  }
+  inp.addEventListener('input', refresh);
+  only.addEventListener('change', refresh);
+  refresh();
+})();
 </script>
 </body>
 </html>
