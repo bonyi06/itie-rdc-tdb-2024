@@ -279,26 +279,60 @@ tbody tr:hover td{background:var(--surface-2)}
   </div>
 </section>
 
+{# Comptes régies déclarantes vs non-déclarantes #}
+{% set regies_decl = data.regies_all|selectattr("lignes", "gt", 0)|list %}
+{% set regies_nodecl = data.regies_all|rejectattr("lignes", "gt", 0)|list %}
+
 <section class="main-sec">
   <div class="sec-inner">
     <div class="sec-head">
-      <h2>Toutes les régies perceptrices</h2>
-      <span class="sec-note">{{ data.regies_all|length }} structures, classées par équivalent USD décroissant</span>
+      <h2>État des déclarations des régies perceptrices</h2>
+      <span class="sec-note">{{ data.regies_all|length }} structures au total — {{ regies_decl|length }} ont déclaré, {{ regies_nodecl|length }} n'ont pas déclaré</span>
     </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px;background:var(--ok-soft);border:1px solid #BBF7D0;border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:#15803D;line-height:1">{{ regies_decl|length }}</div>
+        <div style="font-size:0.85rem;color:#15803D;margin-top:4px">Régies ayant déclaré</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--crit-soft);border:1px solid #FECACA;border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:#991B1B;line-height:1">{{ regies_nodecl|length }}</div>
+        <div style="font-size:0.85rem;color:#991B1B;margin-top:4px">Régies n'ayant pas déclaré</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:var(--itie-blue);line-height:1">{{ "%.0f"|format(regies_decl|length / data.regies_all|length * 100 if data.regies_all|length else 0) }}%</div>
+        <div style="font-size:0.85rem;color:var(--fg-muted);margin-top:4px">Taux de couverture</div>
+      </div>
+    </div>
+
     <div class="controls">
       <input type="search" id="searchRegies" placeholder="Rechercher une régie…" />
-      <label style="margin-left:auto;font-size:0.82rem;color:var(--fg-muted);display:inline-flex;align-items:center;gap:6px">
-        <input type="checkbox" id="onlyDeclaring" checked> Uniquement celles ayant déclaré
-      </label>
+      <div style="display:inline-flex;gap:4px;margin-left:auto;background:var(--surface-2);padding:3px;border-radius:6px">
+        <button type="button" class="reg-filter-btn active" data-filter="all"
+                style="background:#FFF;border:0;padding:6px 14px;border-radius:4px;font:600 0.82rem 'Montserrat',sans-serif;cursor:pointer;color:var(--fg)">Toutes</button>
+        <button type="button" class="reg-filter-btn" data-filter="decl"
+                style="background:transparent;border:0;padding:6px 14px;border-radius:4px;font:600 0.82rem 'Montserrat',sans-serif;cursor:pointer;color:var(--fg-muted)">Ont déclaré</button>
+        <button type="button" class="reg-filter-btn" data-filter="nodecl"
+                style="background:transparent;border:0;padding:6px 14px;border-radius:4px;font:600 0.82rem 'Montserrat',sans-serif;cursor:pointer;color:var(--fg-muted)">N'ont pas déclaré</button>
+      </div>
     </div>
+
     <div class="table-wrap">
       <table>
-        <thead><tr><th style="width:40px">N°</th><th>Structure</th><th class="right">Lignes</th><th class="right">Total USD</th><th class="right">Total CDF</th><th class="right">Équivalent USD</th></tr></thead>
+        <thead><tr><th style="width:40px">N°</th><th>Structure</th><th style="width:140px">Statut</th><th class="right">Lignes</th><th class="right">Total USD</th><th class="right">Total CDF</th><th class="right">Équivalent USD</th></tr></thead>
         <tbody id="regiesBody">
         {% for r in data.regies_all %}
-          <tr data-name="{{ r.structure|lower }}" data-lignes="{{ r.lignes }}" data-usd-eq="{{ r.usd_eq }}">
+          {% set has_decl = r.lignes > 0 or r.usd_eq > 0 %}
+          <tr data-name="{{ r.structure|lower }}" data-lignes="{{ r.lignes }}" data-usd-eq="{{ r.usd_eq }}" data-decl="{{ 1 if has_decl else 0 }}">
             <td style="color:var(--fg-dim)" class="num">{{ "%02d" % (loop.index) }}</td>
             <td class="name">{{ r.structure }}</td>
+            <td>
+              {% if has_decl %}
+                <span style="display:inline-flex;align-items:center;gap:6px;background:var(--ok-soft);color:#15803D;font-weight:700;font-size:0.74rem;padding:3px 10px;border-radius:999px"><span style="width:7px;height:7px;background:#16A34A;border-radius:50%"></span>A déclaré</span>
+              {% else %}
+                <span style="display:inline-flex;align-items:center;gap:6px;background:var(--crit-soft);color:#991B1B;font-weight:700;font-size:0.74rem;padding:3px 10px;border-radius:999px"><span style="width:7px;height:7px;background:#DC2626;border-radius:50%"></span>Pas déclaré</span>
+              {% endif %}
+            </td>
             <td class="right num">{{ "{:,.0f}".format(r.lignes).replace(",", " ") }}</td>
             <td class="right num">{% if r.usd > 0 %}{{ "{:,.2f}".format(r.usd).replace(",", "X").replace(".", ",").replace("X", " ") }}{% else %}—{% endif %}</td>
             <td class="right num">{% if r.cdf > 0 %}{{ "{:,.2f}".format(r.cdf).replace(",", "X").replace(".", ",").replace("X", " ") }}{% else %}—{% endif %}</td>
@@ -313,7 +347,29 @@ tbody tr:hover td{background:var(--surface-2)}
 
 <section class="alt-sec">
   <div class="sec-inner">
-    <div class="sec-head"><h2>Top entreprises par volume de déclarations</h2><span class="sec-note">Nombre de lignes de flux déclarées</span></div>
+    <div class="sec-head">
+      <h2>État des déclarations des entreprises</h2>
+      {% set nb_non_decl = data.nb_enrolled - data.entreprises|length if data.nb_enrolled > data.entreprises|length else 0 %}
+      <span class="sec-note">{{ data.entreprises|length }} entreprises ont déclaré sur {{ data.nb_enrolled }} enrôlées — {{ nb_non_decl }} n'ont pas encore déclaré</span>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px;background:var(--ok-soft);border:1px solid #BBF7D0;border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:#15803D;line-height:1">{{ data.entreprises|length }}</div>
+        <div style="font-size:0.85rem;color:#15803D;margin-top:4px">Entreprises ayant déclaré</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--crit-soft);border:1px solid #FECACA;border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:#991B1B;line-height:1">{{ nb_non_decl }}</div>
+        <div style="font-size:0.85rem;color:#991B1B;margin-top:4px">Entreprises enrôlées non déclarantes</div>
+        <div style="font-size:0.7rem;color:var(--fg-muted);margin-top:4px;line-height:1.3">(nombre total ; liste individuelle non publiée par T/SL)</div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:1.6rem;color:var(--itie-blue);line-height:1">{{ "%.0f"|format(data.entreprises|length / data.nb_enrolled * 100 if data.nb_enrolled else 0) }}%</div>
+        <div style="font-size:0.85rem;color:var(--fg-muted);margin-top:4px">Taux de couverture</div>
+      </div>
+    </div>
+
+    <h3 style="font-size:1rem;color:var(--fg-muted);margin:6px 0 10px;font-weight:600">Liste des entreprises ayant déclaré</h3>
     <div class="controls">
       <input type="search" id="searchBox" placeholder="Rechercher une entreprise ou un NIF…" />
     </div>
@@ -404,23 +460,25 @@ document.getElementById('searchBox').addEventListener('input', e => {
   });
 });
 
-// Filtre & renumérotation du tableau "Toutes les régies perceptrices"
+// Filtre & renumérotation du tableau régies — avec 3 boutons Toutes/Déclarantes/Non-déclarantes
 (function(){
   const inp  = document.getElementById('searchRegies');
-  const only = document.getElementById('onlyDeclaring');
   const body = document.getElementById('regiesBody');
+  const btns = document.querySelectorAll('.reg-filter-btn');
   if (!inp || !body) return;
   const rows = Array.from(body.querySelectorAll('tr'));
+  let currentFilter = 'all';
+
   function refresh(){
     const q = inp.value.toLowerCase().trim();
-    const declOnly = only.checked;
     let visible = 0;
     rows.forEach(tr => {
       const nameOK = !q || tr.dataset.name.includes(q);
-      const lignes = parseFloat(tr.dataset.lignes) || 0;
-      const usdEq  = parseFloat(tr.dataset.usdEq)  || 0;
-      const declOK = !declOnly || lignes > 0 || usdEq > 0;
-      const shown  = nameOK && declOK;
+      const hasDecl = tr.dataset.decl === '1';
+      let filterOK = true;
+      if (currentFilter === 'decl')    filterOK = hasDecl;
+      if (currentFilter === 'nodecl')  filterOK = !hasDecl;
+      const shown = nameOK && filterOK;
       tr.classList.toggle('hidden-row', !shown);
       if (shown) {
         visible++;
@@ -428,8 +486,22 @@ document.getElementById('searchBox').addEventListener('input', e => {
       }
     });
   }
+
+  btns.forEach(b => b.addEventListener('click', () => {
+    currentFilter = b.dataset.filter;
+    btns.forEach(x => {
+      x.classList.toggle('active', x === b);
+      if (x === b) {
+        x.style.background = '#FFF';
+        x.style.color = 'var(--fg)';
+      } else {
+        x.style.background = 'transparent';
+        x.style.color = 'var(--fg-muted)';
+      }
+    });
+    refresh();
+  }));
   inp.addEventListener('input', refresh);
-  only.addEventListener('change', refresh);
   refresh();
 })();
 </script>
